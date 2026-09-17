@@ -1,0 +1,127 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: oklch(0.16 0.02 260);
+  --bg-soft: oklch(0.18 0.02 260);
+  --card: oklch(0.21 0.025 260);
+  --card-hover: oklch(0.24 0.028 260);
+  --fg: oklch(0.97 0.01 240);
+  --muted: oklch(0.68 0.03 250);
+  --border: oklch(0.30 0.03 260);
+  --primary: oklch(0.78 0.15 195);
+  --primary-fg: oklch(0.15 0.03 260);
+  --accent: oklch(0.65 0.20 295);
+  --success: oklch(0.72 0.17 155);
+  --warning: oklch(0.80 0.16 75);
+  --destructive: oklch(0.65 0.22 25);
+  --gradient: linear-gradient(135deg, var(--primary), var(--accent));
+  --glow: 0 0 50px -12px oklch(0.78 0.15 195 / 0.45);
+}
+
+body {
+  background:
+    radial-gradient(ellipse 900px 500px at 15% -10%, oklch(0.65 0.20 295 / 0.18), transparent),
+    radial-gradient(ellipse 900px 500px at 100% 0%, oklch(0.78 0.15 195 / 0.14), transparent),
+    var(--bg);
+  color: var(--fg);
+  font-family: 'Inter', sans-serif;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-sora {
+  font-family: 'Sora', sans-serif;
+}
+
+.font-inter {
+  font-family: 'Inter', sans-serif;
+}
+
+.font-mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.bg-fintech-gradient {
+  background: var(--gradient);
+}
+
+.bg-fintech-card {
+  background: var(--card);
+}
+
+.bg-fintech-soft {
+  background: var(--bg-soft);
+}
+
+.border-fintech {
+  border-color: var(--border);
+}
+
+.text-fintech-muted {
+  color: var(--muted);
+}
+
+.text-fintech-primary {
+  color: var(--primary);
+}
+
+.text-fintech-success {
+  color: var(--success);
+}
+
+.text-fintech-warning {
+  color: var(--warning);
+}
+
+.text-fintech-destructive {
+  color: var(--destructive);
+}
+
+.shadow-glow {
+  box-shadow: var(--glow);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.35s ease forwards;
+}
+
+@keyframes blink {
+  0%, 60%, 100% { opacity: 0.3; }
+  30% { opacity: 1; }
+}
+
+.typing-dot:nth-child(1) { animation: blink 1.2s infinite; }
+.typing-dot:nth-child(2) { animation: blink 1.2s infinite 0.2s; }
+.typing-dot:nth-child(3) { animation: blink 1.2s infinite 0.4s; }
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.40 0.03 260);
+}
