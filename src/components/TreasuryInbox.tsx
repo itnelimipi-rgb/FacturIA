@@ -22,6 +22,7 @@ interface TreasuryInboxProps {
   onOpenResolver: (tx: BankTransaction) => void;
   onOpenCfdiDetail: (cfdi: CfdiRecord) => void;
   onUnmatch: (txId: string) => void;
+  onResumeReconciliation?: (txId: string) => void | Promise<void>;
   onRequestUploadForDiscrepancy: (tx: BankTransaction) => void;
   onOpenRegisterModal?: () => void;
 }
@@ -32,11 +33,27 @@ export const TreasuryInbox: React.FC<TreasuryInboxProps> = ({
   onOpenResolver,
   onOpenCfdiDetail,
   onUnmatch,
+  onResumeReconciliation,
   onRequestUploadForDiscrepancy,
   onOpenRegisterModal
 }) => {
   const [activeTab, setActiveTab] = useState<'all' | ReconciliationStatus>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [pendingResumeId, setPendingResumeId] = useState<string | null>(null);
+  const [resumeError, setResumeError] = useState('');
+
+  const resumeReconciliation = async (transactionId: string) => {
+    if (!onResumeReconciliation || pendingResumeId) return;
+    setPendingResumeId(transactionId);
+    setResumeError('');
+    try {
+      await onResumeReconciliation(transactionId);
+    } catch (error) {
+      setResumeError(error instanceof Error ? error.message : 'No se pudo reactivar la búsqueda. Intenta nuevamente.');
+    } finally {
+      setPendingResumeId(null);
+    }
+  };
 
   const cfdiMap = new Map<string, CfdiRecord>(cfdis.map((c) => [c.id, c]));
 
@@ -57,16 +74,18 @@ export const TreasuryInbox: React.FC<TreasuryInboxProps> = ({
       );
     });
 
-  const formatCurrency = (val: number) => {
+  const formatCurrency = (val: number, currency: string) => {
     return new Intl.NumberFormat('es-MX', {
       style: 'currency',
-      currency: 'MXN',
+      currency,
+      currencyDisplay: 'code',
       minimumFractionDigits: 2
     }).format(Math.abs(val));
   };
 
   return (
     <div className="w-full space-y-4">
+      {resumeError && <p role="alert" className="text-xs text-rose-300 rounded-xl border border-rose-800 bg-rose-950/30 p-3">{resumeError}</p>}
       {/* Barra de Acciones y Pestañas */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[oklch(0.30_0.03_260)] pb-4">
         {/* Pestañas de Estados */}
@@ -75,7 +94,7 @@ export const TreasuryInbox: React.FC<TreasuryInboxProps> = ({
             onClick={() => setActiveTab('all')}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
               activeTab === 'all'
-                ? 'bg-gradient-to-r from-[oklch(0.78_0.15_195)] to-[oklch(0.65_0.20_295)] text-[oklch(0.15_0.03_260)] shadow-sm'
+                ? 'bg-linear-to-r from-[oklch(0.78_0.15_195)] to-[oklch(0.65_0.20_295)] text-[oklch(0.15_0.03_260)] shadow-xs'
                 : 'text-[oklch(0.68_0.03_250)] hover:text-white'
             }`}
           >
@@ -87,7 +106,7 @@ export const TreasuryInbox: React.FC<TreasuryInboxProps> = ({
             onClick={() => setActiveTab('conciliado')}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
               activeTab === 'conciliado'
-                ? 'bg-[oklch(0.72_0.17_155)] text-[oklch(0.12_0.03_165)] shadow-sm'
+                ? 'bg-[oklch(0.72_0.17_155)] text-[oklch(0.12_0.03_165)] shadow-xs'
                 : 'text-[oklch(0.72_0.17_155)] hover:bg-[oklch(0.72_0.17_155/0.1)]'
             }`}
           >
@@ -102,7 +121,7 @@ export const TreasuryInbox: React.FC<TreasuryInboxProps> = ({
             onClick={() => setActiveTab('ambiguo')}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
               activeTab === 'ambiguo'
-                ? 'bg-[oklch(0.80_0.16_75)] text-black shadow-sm'
+                ? 'bg-[oklch(0.80_0.16_75)] text-black shadow-xs'
                 : 'text-[oklch(0.80_0.16_75)] hover:bg-[oklch(0.80_0.16_75/0.1)]'
             }`}
           >
@@ -117,7 +136,7 @@ export const TreasuryInbox: React.FC<TreasuryInboxProps> = ({
             onClick={() => setActiveTab('discrepancia')}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
               activeTab === 'discrepancia'
-                ? 'bg-[oklch(0.65_0.22_25)] text-white shadow-sm'
+                ? 'bg-[oklch(0.65_0.22_25)] text-white shadow-xs'
                 : 'text-rose-400 hover:bg-rose-950/40'
             }`}
           >
@@ -138,17 +157,17 @@ export const TreasuryInbox: React.FC<TreasuryInboxProps> = ({
               placeholder="Buscar concepto o monto..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-[oklch(0.30_0.03_260)] bg-[oklch(0.21_0.025_260)] text-white placeholder:text-[oklch(0.68_0.03_250)] focus:outline-none focus:border-[oklch(0.78_0.15_195)]"
+              className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-[oklch(0.30_0.03_260)] bg-[oklch(0.21_0.025_260)] text-white placeholder:text-[oklch(0.68_0.03_250)] focus:outline-hidden focus:border-[oklch(0.78_0.15_195)]"
             />
           </div>
 
           {onOpenRegisterModal && (
             <button
               onClick={onOpenRegisterModal}
-              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-[oklch(0.78_0.15_195)] to-[oklch(0.65_0.20_295)] text-[oklch(0.15_0.03_260)] text-xs font-bold font-sora shadow-glow flex items-center gap-1.5 hover:brightness-105 transition-all flex-shrink-0"
+              className="px-3 py-1.5 rounded-xl bg-linear-to-r from-[oklch(0.78_0.15_195)] to-[oklch(0.65_0.20_295)] text-[oklch(0.15_0.03_260)] text-xs font-bold font-sora shadow-glow flex items-center gap-1.5 hover:brightness-105 transition-all shrink-0"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Registrar Factura</span>
+              <span className="hidden sm:inline">Registrar gasto</span>
             </button>
           )}
         </div>
@@ -180,7 +199,7 @@ export const TreasuryInbox: React.FC<TreasuryInboxProps> = ({
                   {/* Icono y Detalles */}
                   <div className="flex items-start gap-3 flex-1 min-w-0">
                     <div
-                      className={`p-2.5 rounded-xl flex-shrink-0 mt-0.5 ${
+                      className={`p-2.5 rounded-xl shrink-0 mt-0.5 ${
                         tx.status === 'conciliado'
                           ? 'bg-[oklch(0.72_0.17_155/0.15)] text-[oklch(0.72_0.17_155)]'
                           : tx.status === 'ambiguo'
@@ -210,7 +229,7 @@ export const TreasuryInbox: React.FC<TreasuryInboxProps> = ({
                         )}
                         {tx.status === 'ambiguo' && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[oklch(0.80_0.16_75/0.15)] text-[oklch(0.80_0.16_75)] border border-[oklch(0.80_0.16_75/0.3)] animate-pulse">
-                            🟡 Ambiguo ({tx.candidateCfdiIds?.length || 2} candidatos)
+                            🟡 Ambiguo ({tx.candidateCfdiIds?.length || 0} candidatos)
                           </span>
                         )}
                         {tx.status === 'discrepancia' && (
@@ -244,14 +263,15 @@ export const TreasuryInbox: React.FC<TreasuryInboxProps> = ({
                       {/* Alerta de Discrepancia */}
                       {tx.status === 'discrepancia' && (
                         <div className="text-xs text-rose-300 flex items-center gap-1.5 pt-1">
-                          <ShieldAlert className="w-3.5 h-3.5 flex-shrink-0 text-rose-400" />
+                          <ShieldAlert className="w-3.5 h-3.5 shrink-0 text-rose-400" />
                           <span>
-                            {tx.alertReason || 'Gasto no comprobado: Impacta directamente tu flujo fiscal'}
+                            {tx.alertReason || 'Pendiente de vincular con un comprobante fiscal.'}
                           </span>
                         </div>
                       )}
 
                       {/* Match Conciliado */}
+                      {tx.reconciliationLocked && <p className="text-xs text-amber-300 pt-1">Pendiente de revisión manual · búsqueda automática pausada.</p>}
                       {tx.status === 'conciliado' && matchedCfdi && (
                         <div className="flex items-center gap-2 pt-1 flex-wrap">
                           <button
@@ -277,33 +297,46 @@ export const TreasuryInbox: React.FC<TreasuryInboxProps> = ({
                           >
                             <Unlink className="w-3 h-3" /> Desvincular
                           </button>
+                          {matchedCfdi.statusSat === 'no_verificado' && <span className="text-[10px] text-amber-300">Vigencia SAT sin verificar</span>}
                         </div>
                       )}
                     </div>
                   </div>
 
                   {/* Monto y Botones de Acción */}
-                  <div className="flex sm:flex-col items-end justify-between sm:justify-center gap-2 flex-shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-[oklch(0.30_0.03_260)]">
+                  <div className="flex sm:flex-col items-end justify-between sm:justify-center gap-2 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-[oklch(0.30_0.03_260)]">
                     <div
                       className={`font-mono text-base sm:text-lg font-bold ${
                         isIncome ? 'text-[oklch(0.72_0.17_155)]' : 'text-white'
                       }`}
                     >
-                      {isIncome ? '+' : '-'}{formatCurrency(tx.amount)}
+                      {isIncome ? '+' : '-'}{formatCurrency(tx.amount, tx.currency)}
                     </div>
 
                     {tx.status === 'ambiguo' && (
                       <button
                         type="button"
                         onClick={() => onOpenResolver(tx)}
-                        className="px-3.5 py-1.5 text-xs font-sora font-bold rounded-xl bg-[oklch(0.80_0.16_75)] text-black shadow-sm hover:brightness-105 transition-all flex items-center gap-1.5"
+                        className="px-3.5 py-1.5 text-xs font-sora font-bold rounded-xl bg-[oklch(0.80_0.16_75)] text-black shadow-xs hover:brightness-105 transition-all flex items-center gap-1.5"
                       >
                         <HelpCircle className="w-3.5 h-3.5" />
-                        Resolver (1 Clic)
+                        Revisar candidatos
                       </button>
                     )}
 
-                    {tx.status === 'discrepancia' && (
+                    {tx.reconciliationLocked && onResumeReconciliation && (
+                      <button
+                        type="button"
+                        disabled={pendingResumeId !== null}
+                        aria-busy={pendingResumeId === tx.id}
+                        onClick={() => void resumeReconciliation(tx.id)}
+                        className="px-3 py-1.5 text-xs font-medium rounded-xl bg-[oklch(0.78_0.15_195/0.12)] hover:bg-[oklch(0.78_0.15_195/0.2)] border border-[oklch(0.78_0.15_195/0.35)] text-[oklch(0.78_0.15_195)] transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                      >
+                        <Search className="w-3.5 h-3.5" />
+                        {pendingResumeId === tx.id ? 'Buscando…' : 'Buscar coincidencias'}
+                      </button>
+                    )}
+                    {tx.status === 'discrepancia' && !tx.reconciliationLocked && (
                       <button
                         type="button"
                         onClick={() => onRequestUploadForDiscrepancy(tx)}
@@ -319,6 +352,23 @@ export const TreasuryInbox: React.FC<TreasuryInboxProps> = ({
           })
         )}
       </div>
+      <section className="pt-4 border-t border-[oklch(0.30_0.03_260)]">
+        <h2 className="font-sora font-bold text-sm text-white mb-3">Comprobantes registrados ({cfdis.length})</h2>
+        {cfdis.length === 0 ? <p className="text-xs text-[oklch(0.68_0.03_250)]">Carga un XML o registra un gasto provisional para comenzar.</p> : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {cfdis.map(record => <button key={record.id} type="button" onClick={() => onOpenCfdiDetail(record)} className="text-left p-3 rounded-xl border border-[oklch(0.30_0.03_260)] bg-[oklch(0.18_0.02_260)] hover:border-[oklch(0.78_0.15_195)] transition-colors flex gap-3">
+              <FileCheck2 className="w-4 h-4 text-[oklch(0.78_0.15_195)] shrink-0 mt-1" />
+              <span className="min-w-0 flex-1 space-y-1">
+                <span className="block text-xs font-semibold text-white truncate">{record.nombreEmisor || record.rfcEmisor}</span>
+                <span className="block font-mono text-[11px] text-[oklch(0.68_0.03_250)] break-all">{record.uuidSat || 'Gasto provisional · sin UUID fiscal'}</span>
+                <span className="block text-xs text-white">{formatCurrency(record.total, record.currency || 'MXN')}</span>
+                <span className={`block text-[10px] ${record.statusSat === 'cancelado' ? 'text-rose-300' : 'text-amber-300'}`}>{record.sourceType === 'manual' ? 'Registro manual pendiente de CFDI' : record.statusSat === 'no_verificado' ? 'Vigencia SAT sin verificar' : record.statusSat === 'cancelado' ? 'Marcado como cancelado' : 'Marcado como vigente'}</span>
+              </span>
+              <ExternalLink className="w-3 h-3 text-[oklch(0.68_0.03_250)] shrink-0 mt-1" />
+            </button>)}
+          </div>
+        )}
+      </section>
     </div>
   );
 };

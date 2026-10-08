@@ -12,11 +12,11 @@ const AUTH_TAG_LENGTH = 16;
  * Emplea AES-256-GCM con autenticación criptográfica contra manipulaciones.
  */
 export class CredentialCryptoService {
-  private static masterKey: Buffer = crypto.scryptSync(
-    process.env.FACTURIA_ENCRYPTION_SECRET || 'facturia-secret-salt-default-key-2026-mx',
-    'facturia-sat-salt',
-    32
-  );
+  private static get masterKey(): Buffer {
+    const secret = process.env.FACTURIA_ENCRYPTION_SECRET;
+    if (!secret || secret.length < 32) throw new Error('Configura una clave de cifrado aleatoria de al menos 32 caracteres.');
+    return crypto.scryptSync(secret, 'facturia-sat-salt', 32);
+  }
 
   /**
    * Cifra un texto plano o buffer devolviendo una cadena con IV + Tag + Ciphertext en Base64

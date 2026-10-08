@@ -23,7 +23,7 @@ export const SEED_CFDIS: CfdiRecord[] = [
     iva: 160.00,
     retenciones: 0.00,
     fechaEmision: '2026-09-08T10:15:00Z',
-    tipoComprobante: 'E',
+    tipoComprobante: 'I',
     statusSat: 'vigente',
     isEfos: false,
     conceptos: [
@@ -75,7 +75,7 @@ export const SEED_CFDIS: CfdiRecord[] = [
     iva: 62.07,
     retenciones: 0.00,
     fechaEmision: '2026-09-09T09:30:00Z',
-    tipoComprobante: 'E',
+    tipoComprobante: 'I',
     statusSat: 'vigente',
     isEfos: false,
     conceptos: [
@@ -101,7 +101,7 @@ export const SEED_CFDIS: CfdiRecord[] = [
     iva: 68.97,
     retenciones: 0.00,
     fechaEmision: '2026-09-08T18:20:00Z',
-    tipoComprobante: 'E',
+    tipoComprobante: 'I',
     statusSat: 'vigente',
     isEfos: false,
     conceptos: [
@@ -127,7 +127,7 @@ export const SEED_CFDIS: CfdiRecord[] = [
     iva: 68.97,
     retenciones: 0.00,
     fechaEmision: '2026-09-09T11:10:00Z',
-    tipoComprobante: 'E',
+    tipoComprobante: 'I',
     statusSat: 'vigente',
     isEfos: false,
     conceptos: [
@@ -153,7 +153,7 @@ export const SEED_CFDIS: CfdiRecord[] = [
     iva: 1172.41,
     retenciones: 0.00,
     fechaEmision: '2026-09-06T12:00:00Z',
-    tipoComprobante: 'E',
+    tipoComprobante: 'I',
     statusSat: 'vigente',
     isEfos: true,
     conceptos: [
@@ -166,7 +166,6 @@ export const SEED_CFDIS: CfdiRecord[] = [
     sourceType: 'xml'
   }
 ];
-
 export const SEED_TRANSACTIONS: BankTransaction[] = [
   // 1. Concilia automáticamente con cfdi-001
   {

@@ -20,6 +20,7 @@ export interface BankTransaction {
   matchedCfdiId?: string | null;
   candidateCfdiIds?: string[];
   alertReason?: string;
+  reconciliationLocked?: boolean;
 }
 
 export interface CfdiRecord {
@@ -36,14 +37,19 @@ export interface CfdiRecord {
   retenciones: number;
   fechaEmision: string; // ISO 8601
   tipoComprobante: 'I' | 'E' | 'T' | 'N' | 'P'; // I: Ingreso, E: Egreso
-  statusSat: 'vigente' | 'cancelado';
+  statusSat: 'vigente' | 'cancelado' | 'no_verificado';
   isEfos: boolean;
   conceptos?: Array<{
     claveProdServ?: string;
     descripcion: string;
     importe: number;
   }>;
-  sourceType?: 'xml' | 'pdf' | 'image';
+  sourceType?: 'xml' | 'pdf' | 'image' | 'manual';
+  currency?: string;
+  descuento?: number;
+  usoCfdi?: string;
+  formaPago?: string;
+  rawXml?: string;
 }
 
 export interface EfosEntry {
@@ -61,12 +67,13 @@ export interface MatchingResult {
 }
 
 export interface CashFlowMetrics {
+  currency?: string;
   totalBankBalance: number;
   totalIncome: number;
   totalExpense: number;
   nonDeductibleExpenseDiscrepancies: number;
-  nonDeductibleImpactEstimated: number; // Impacto 30% ISR + 16% IVA no acreditable
-  projectedRetentionsResico: number; // 10.5% retención estimada o retención IVA
+  nonDeductibleImpactEstimated: number; // Legacy field: zero until reviewed tax rules exist.
+  projectedRetentionsResico: number; // Recorded withholding on reconciled documents; no assumed rate.
   conciliadoCount: number;
   ambiguoCount: number;
   discrepanciaCount: number;

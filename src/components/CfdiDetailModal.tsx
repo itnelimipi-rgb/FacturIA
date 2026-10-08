@@ -10,27 +10,34 @@ interface CfdiDetailModalProps {
   cfdi: CfdiRecord | null;
 }
 
-export const CfdiDetailModal: React.FC<CfdiDetailModalProps> = ({ isOpen, onClose, cfdi }) => {
-  if (!isOpen || !cfdi) return null;
+export const CfdiDetailModal: React.FC<CfdiDetailModalProps> = props => props.isOpen && props.cfdi ? <CfdiDetailContent key={props.cfdi.id} {...props} /> : null;
 
+const CfdiDetailContent: React.FC<CfdiDetailModalProps> = ({ isOpen, onClose, cfdi }) => {
   const [copied, setCopied] = React.useState(false);
-
-  const copyUuid = () => {
-    navigator.clipboard?.writeText(cfdi.uuidSat);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const [copyError, setCopyError] = React.useState('');
+  if (!isOpen || !cfdi) return null;
+  const copyUuid = async () => {
+    try {
+      if (!navigator.clipboard) throw new Error('El navegador no permite copiar el UUID.');
+      await navigator.clipboard.writeText(cfdi.uuidSat);
+      setCopied(true);
+      setCopyError('');
+    } catch {
+      setCopyError('No se pudo copiar. Selecciona el UUID y cópialo manualmente.');
+    }
   };
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('es-MX', {
       style: 'currency',
-      currency: 'MXN'
+      currency: cfdi.currency || 'MXN',
+      currencyDisplay: 'code'
     }).format(val);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
-      <div className="bg-[oklch(0.18_0.02_260)] rounded-2xl border border-[oklch(0.30_0.03_260)] shadow-2xl max-w-lg w-full overflow-hidden text-[oklch(0.97_0.01_240)]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-fade-in">
+      <div role="dialog" aria-modal="true" aria-labelledby="cfdi-detail-title" className="bg-[oklch(0.18_0.02_260)] rounded-2xl border border-[oklch(0.30_0.03_260)] shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto text-[oklch(0.97_0.01_240)]">
         {/* Header */}
         <div className="px-6 py-4 border-b border-[oklch(0.30_0.03_260)] flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -38,14 +45,15 @@ export const CfdiDetailModal: React.FC<CfdiDetailModalProps> = ({ isOpen, onClos
               <FileCheck className="w-5 h-5" />
             </span>
             <div>
-              <h3 className="font-sora text-sm font-bold text-white">
-                Comprobante Fiscal Digital (CFDI)
+              <h3 id="cfdi-detail-title" className="font-sora text-sm font-bold text-white">
+                {cfdi.sourceType === 'manual' ? 'Gasto provisional' : 'Comprobante Fiscal Digital (CFDI)'}
               </h3>
-              <p className="text-xs text-[oklch(0.68_0.03_250)]">Comprobante validado ante el SAT</p>
+              <p className="text-xs text-[oklch(0.68_0.03_250)]">{cfdi.sourceType === 'manual' ? 'Captura manual; no emite un CFDI' : cfdi.statusSat === 'no_verificado' ? 'XML importado; vigencia SAT sin verificar' : `Estado registrado: ${cfdi.statusSat}`}</p>
             </div>
           </div>
           <button
             onClick={onClose}
+            aria-label="Cerrar detalle del comprobante"
             className="p-1 rounded-lg text-[oklch(0.68_0.03_250)] hover:text-white"
           >
             <X className="w-5 h-5" />
@@ -55,11 +63,11 @@ export const CfdiDetailModal: React.FC<CfdiDetailModalProps> = ({ isOpen, onClos
         {/* Alerta si es EFOS */}
         {cfdi.isEfos && (
           <div className="mx-6 mt-4 p-3 rounded-xl bg-rose-950/40 border border-rose-800 text-rose-200 text-xs flex items-start gap-2">
-            <ShieldAlert className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
+            <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
             <div>
-              <strong className="font-sora">ALERTA DE SEGURIDAD FISCAL (Art. 69-B CFF):</strong>
+              <strong className="font-sora">ALERTA EFOS REGISTRADA:</strong>
               <p className="mt-0.5">
-                El RFC {cfdi.rfcEmisor} figura en la lista definitiva de Empresas que Facturan Operaciones Simuladas (EFOS). Esta factura NO es deducible y anula el acreditamiento de IVA.
+                El RFC {cfdi.rfcEmisor} fue marcado con una alerta EFOS. En la demostración se usa una lista de ejemplo; revisa la fuente oficial antes de tomar decisiones fiscales.
               </p>
             </div>
           </div>
@@ -74,17 +82,19 @@ export const CfdiDetailModal: React.FC<CfdiDetailModalProps> = ({ isOpen, onClos
             </div>
             <div className="flex items-center justify-between gap-2 mt-1">
               <span className="font-mono text-xs font-bold text-white break-all">
-                {cfdi.uuidSat}
+                {cfdi.uuidSat || 'Sin UUID fiscal. Registro provisional pendiente de CFDI.'}
               </span>
               <button
                 type="button"
-                onClick={copyUuid}
+                onClick={() => void copyUuid()}
+                disabled={!cfdi.uuidSat}
                 className="p-1.5 rounded-md hover:bg-[oklch(0.24_0.028_260)] text-[oklch(0.68_0.03_250)] hover:text-white"
                 title="Copiar UUID"
               >
                 {copied ? <CheckCircle2 className="w-3.5 h-3.5 text-[oklch(0.72_0.17_155)]" /> : <Copy className="w-3.5 h-3.5" />}
               </button>
             </div>
+            {copyError && <p role="alert" className="text-xs text-rose-300 mt-2">{copyError}</p>}
           </div>
 
           {/* Emisor y Receptor */}
@@ -112,19 +122,20 @@ export const CfdiDetailModal: React.FC<CfdiDetailModalProps> = ({ isOpen, onClos
           {/* Desglose Matemático Determinista */}
           <div className="p-4 rounded-xl bg-[oklch(0.21_0.025_260)] border border-[oklch(0.30_0.03_260)] space-y-2">
             <div className="text-[11px] font-semibold uppercase text-[oklch(0.68_0.03_250)] mb-1">
-              Desglose Determinista de Impuestos
+              Importes registrados
             </div>
             <div className="flex justify-between text-xs text-[oklch(0.90_0.01_240)]">
               <span>Subtotal</span>
               <span className="font-mono">{formatCurrency(cfdi.subtotal)}</span>
             </div>
+            {!!cfdi.descuento && <div className="flex justify-between text-xs text-[oklch(0.90_0.01_240)]"><span>Descuento declarado</span><span className="font-mono">-{formatCurrency(cfdi.descuento)}</span></div>}
             <div className="flex justify-between text-xs text-[oklch(0.90_0.01_240)]">
-              <span>IVA Trasladado (16%)</span>
+              <span>IVA declarado</span>
               <span className="font-mono">{formatCurrency(cfdi.iva)}</span>
             </div>
             {cfdi.retenciones > 0 && (
               <div className="flex justify-between text-xs text-amber-400 font-medium">
-                <span>Retenciones (ISR 1.25% RESICO)</span>
+                <span>Retenciones declaradas</span>
                 <span className="font-mono">-{formatCurrency(cfdi.retenciones)}</span>
               </div>
             )}

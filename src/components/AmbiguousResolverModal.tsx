@@ -9,7 +9,7 @@ interface AmbiguousResolverModalProps {
   onClose: () => void;
   transaction: BankTransaction | null;
   candidates: CfdiRecord[];
-  onResolve: (transactionId: string, selectedCfdiId: string) => void;
+  onResolve: (transactionId: string, selectedCfdiId: string) => void | Promise<void>;
 }
 
 export const AmbiguousResolverModal: React.FC<AmbiguousResolverModalProps> = ({
@@ -19,17 +19,18 @@ export const AmbiguousResolverModal: React.FC<AmbiguousResolverModalProps> = ({
   candidates,
   onResolve
 }) => {
+  const [resolvingId, setResolvingId] = React.useState<string | null>(null);
   if (!isOpen || !transaction) return null;
 
-  const formatCurrency = (val: number) => {
+  const formatCurrency = (val: number, currency = transaction.currency) => {
     return new Intl.NumberFormat('es-MX', {
       style: 'currency',
-      currency: 'MXN'
+      currency
     }).format(Math.abs(val));
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-fade-in">
       <div className="bg-[oklch(0.18_0.02_260)] rounded-2xl border border-[oklch(0.30_0.03_260)] shadow-2xl max-w-2xl w-full overflow-hidden text-[oklch(0.97_0.01_240)]">
         {/* Header */}
         <div className="px-6 py-4 border-b border-[oklch(0.30_0.03_260)] flex items-center justify-between bg-[oklch(0.80_0.16_75/0.1)]">
@@ -68,7 +69,7 @@ export const AmbiguousResolverModal: React.FC<AmbiguousResolverModalProps> = ({
                 <div className="text-xs text-[oklch(0.68_0.03_250)] flex items-center gap-2 mt-0.5">
                   <span className="font-mono">Fecha: {transaction.date}</span>
                   <span>•</span>
-                  <span className="font-mono text-[oklch(0.78_0.15_195)]">Cuenta BBVA *4421</span>
+                  <span className="font-mono text-[oklch(0.78_0.15_195)]">Cuenta: {transaction.accountId}</span>
                 </div>
               </div>
               <div className="text-lg font-mono font-bold text-rose-400">
@@ -108,7 +109,7 @@ export const AmbiguousResolverModal: React.FC<AmbiguousResolverModalProps> = ({
                     </span>
                     <span className="flex items-center gap-1 font-mono">
                       <FileText className="w-3.5 h-3.5" />
-                      Subtotal: ${cfdi.subtotal.toFixed(2)} + IVA 16%: ${cfdi.iva.toFixed(2)}
+                      Subtotal: {formatCurrency(cfdi.subtotal, cfdi.currency || 'MXN')} · IVA registrado: {formatCurrency(cfdi.iva, cfdi.currency || 'MXN')}
                     </span>
                   </div>
 
@@ -123,17 +124,23 @@ export const AmbiguousResolverModal: React.FC<AmbiguousResolverModalProps> = ({
                   </div>
                 </div>
 
-                <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2 flex-shrink-0">
+                <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2 shrink-0">
                   <div className="font-mono text-base font-bold text-white">
-                    {formatCurrency(cfdi.total)}
+                    {formatCurrency(cfdi.total, cfdi.currency || 'MXN')}
                   </div>
                   <button
                     type="button"
-                    onClick={() => onResolve(transaction.id, cfdi.id)}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-sora font-bold rounded-lg bg-gradient-to-r from-[oklch(0.78_0.15_195)] to-[oklch(0.65_0.20_295)] text-[oklch(0.15_0.03_260)] shadow-glow hover:brightness-105 transition-all"
+                    disabled={resolvingId !== null}
+                    onClick={async () => {
+                      if (resolvingId) return;
+                      setResolvingId(cfdi.id);
+                      try { await onResolve(transaction.id, cfdi.id); }
+                      finally { setResolvingId(null); }
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-sora font-bold rounded-lg bg-linear-to-r from-[oklch(0.78_0.15_195)] to-[oklch(0.65_0.20_295)] text-[oklch(0.15_0.03_260)] shadow-glow hover:brightness-105 transition-all disabled:opacity-50"
                   >
                     <Check className="w-3.5 h-3.5" />
-                    Vincular y Conciliar
+                    {resolvingId === cfdi.id ? 'Guardando…' : 'Vincular y Conciliar'}
                   </button>
                 </div>
               </div>
@@ -145,7 +152,7 @@ export const AmbiguousResolverModal: React.FC<AmbiguousResolverModalProps> = ({
         <div className="px-6 py-3.5 bg-[oklch(0.21_0.025_260)] border-t border-[oklch(0.30_0.03_260)] flex items-center justify-between text-xs text-[oklch(0.68_0.03_250)]">
           <span className="flex items-center gap-1">
             <ShieldCheck className="w-4 h-4 text-[oklch(0.72_0.17_155)]" />
-            La vinculación actualiza el estado a 🟢 Conciliado y recalcula tu Escudo Fiscal
+            La vinculación actualiza la conciliación documental. Vigencia SAT pendiente.
           </span>
           <button
             onClick={onClose}
