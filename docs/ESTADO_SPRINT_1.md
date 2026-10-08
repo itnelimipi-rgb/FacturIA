@@ -1,11 +1,12 @@
 # Punto de avance — 8 de octubre de 2026
 
-Trabajo en `sprint-1`. El primer backend y sus flujos están implementados; la
-habilitación de PostgreSQL y el despliegue de staging requieren autorización.
+Trabajo publicado en `sprint-1`, con autoría de la cuenta GitHub del usuario.
+PostgreSQL local está habilitado y migrado. Railway staging está autorizado y en
+preparación, con límite duro de USD 10 aplicado al workspace.
 
 ## Verificado localmente
 
-- `npm run check`: lint, TypeScript, **151 pruebas** y build de producción pasan.
+- `npm run check`: lint, TypeScript, **166 pruebas** y build de producción pasan.
 - `npm audit`: cero vulnerabilidades conocidas reportadas, incluidas dependencias
   de desarrollo, en la consulta de esta fecha.
 - XML originales, CSV con centavos/fechas reales, perfil, gastos provisionales,
@@ -17,8 +18,13 @@ habilitación de PostgreSQL y el despliegue de staging requieren autorización.
   vínculos únicos. Importaciones repetidas conservan el estado del usuario.
 - Demo y espacio autenticado tienen almacenamientos distintos; el espacio
   personal no carga las muestras de demostración.
-- Servidor local de producción: health, importación XML, matching, asistente,
-  EFOS etiquetado como demo, errores de entrada y espacio aún sin configurar.
+- Exportación JSON v1 autenticada con XML originales propios, snapshot consistente
+  sin escrituras, descarga de hasta 25 MiB y CSV protegido frente a fórmulas.
+- Servidor local de producción con PostgreSQL 18: dos cuentas sintéticas, cookies,
+  origen, identidad, XML/CSV, duplicados, conciliación, exportación y logout.
+  El script `scripts/verify-workspace-http.mjs` permite repetir el flujo por HTTP.
+- Una regresión de 101 CFDI candidatos confirma que contratos y exportaciones
+  admiten ambigüedades dentro del límite acumulado de documentos.
 
 ## Pendiente antes de main
 

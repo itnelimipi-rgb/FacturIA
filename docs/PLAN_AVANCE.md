@@ -36,7 +36,8 @@ se suman monedas distintas. Flujo visual demo revisado.
 - Revalidación de XML en servidor. Identidad siempre obtenida de la sesión,
   nunca del `userId` enviado por el navegador. Escrituras restringidas al origen.
 - Desplegar aplicación + PostgreSQL en proyecto `facturia-staging`, entorno
-  `staging`, dominio automático Railway. Solicitar autorización antes de crearlo.
+  `staging`, dominio automático Railway. Autorizado el 8 de octubre de 2026 con
+  límite duro de USD 10 para recursos del workspace.
 - Usar exclusivamente datos sintéticos en el primer despliegue.
 
 Criterio de salida: dos cuentas aisladas, reinicio conserva registros,

@@ -1,6 +1,11 @@
-# Propuesta concreta para Railway
+# Entorno de pruebas en Railway
 
-Solicitud pendiente de autorización del usuario. No se han creado recursos.
+El usuario autorizó staging y un límite duro de USD 10 para recursos de todo el
+workspace. El límite quedó aplicado y comprobado el 8 de octubre de 2026. Al
+alcanzarlo Railway detiene los servicios del workspace, incluidos otros proyectos.
+Railway Agent e impuestos tienen tratamiento independiente: no ejecutar Agent
+ni contratar integraciones adicionales sin revisar el presupuesto.
+También hay PostgreSQL local aislado para desarrollar sin depender de staging.
 
 - Workspace: Danipb15's Projects.
 - Proyecto nuevo: `facturia-staging`.
@@ -9,8 +14,12 @@ Solicitud pendiente de autorización del usuario. No se han creado recursos.
 - Servicio datos: PostgreSQL con volumen persistente y red privada.
 - Dominio: subdominio gratuito generado por Railway para `web`.
 - La demo continúa en `/demo`; las cuentas y registros viven en `/workspace`.
-- Empezar con documentos y cuentas sintéticos; acordar presupuesto/consumo antes
+- Empezar con documentos y cuentas sintéticos; confirmar presupuesto/consumo antes
   de ampliar OCR, IA, proveedores bancarios o usuarios reales.
+
+Proyecto y configuración creados el 8 de octubre de 2026. Dominio asignado:
+`https://web-staging-b090.up.railway.app`. La URL no implica que el despliegue o
+la validación funcional estén terminados; consultar [estado del sprint](ESTADO_SPRINT_1.md).
 
 ## Configuración preparada
 
@@ -39,7 +48,8 @@ No pegar secretos en documentos, Git ni mensajes. Copiar `.env.example` a
 7. Importar `tests/fixtures/sample-bank.csv`; comprobar vínculo y repetir importación
    para probar idempotencia. Probar XML repetido, error de filas y manual sin UUID.
 8. Probar aislamiento, logout, credenciales equivocadas, reinicio y persistencia.
-9. Ensayar exportación/restauración antes de admitir datos reales. Documentar
+9. Comprobar exportación JSON con XML propios. La restauración está pendiente y
+   debe ensayarse antes de admitir datos reales. Documentar
    hallazgos y gastos observados; no promover automáticamente.
 
 La migración `db/migrations` es para PostgreSQL independiente. El esquema antiguo
@@ -47,12 +57,13 @@ La migración `db/migrations` es para PostgreSQL independiente. El esquema antig
 
 ## Límites actuales
 
-La autorización local no equivale a completar pruebas en Railway. El proveedor
+Las pruebas locales no equivalen a completar pruebas en Railway. El proveedor
 de IA/OCR, SMTP, WhatsApp, bancos y SAT aún no está conectado. La primera etapa
 no calcula deducciones ni emite CFDI. El rate limit de autenticación en memoria
 requiere una sola instancia; configurar almacenamiento compartido antes de escalar.
 El piloto limita cada cuenta a 5,000 movimientos y 2,000 documentos acumulados;
-cada XML/CSV admite hasta 2 MB. Ampliar estos límites requiere medir el rendimiento.
+cada XML/CSV admite hasta 2 MB y cada descarga hasta 25 MiB. Ampliar estos límites
+requiere medir el rendimiento. El registro abierto es temporal para estas pruebas.
 
 Configuración contrastada con la [referencia oficial de Railway](https://docs.railway.com/config-as-code/reference)
 y la [configuración Node.js de Railpack](https://railpack.com/languages/node/).

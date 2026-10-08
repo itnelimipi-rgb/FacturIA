@@ -19,6 +19,7 @@ la promoción a `main` requiere pruebas en staging y aprobación del usuario.
   Un documento se vincula a un movimiento; resolución manual de ambigüedades,
   desvinculación y reanudación de búsqueda.
 - Gastos manuales provisionales, sin inventar UUID ni timbre.
+- Descarga de respaldo JSON propio con XML originales y reporte CSV de movimientos.
 - Indicadores derivados de registros, separados por moneda, y asistente por
   reglas que resume los datos disponibles.
 - Autenticación, aislamiento por usuario, restricciones SQL, transacciones y
@@ -69,5 +70,7 @@ misma suite. Los fixtures son sintéticos y no tienen validez fiscal.
 
 Leer [plan de avance](docs/PLAN_AVANCE.md), [propuesta de staging](docs/STAGING.md)
 y [coordinación con Claude Code](docs/COORDINACION.md). `railway.json` prepara
-build, migración y healthcheck; **todavía no hay un despliegue autorizado ni
-verificado en Railway**. No incluir secretos ni documentos reales en Git.
+build, migración y healthcheck. Staging está autorizado con límite duro de USD 10
+para recursos del workspace; su validación externa está en curso. El
+[entorno PostgreSQL local](docs/DESARROLLO_LOCAL.md) permite desarrollar en la PC.
+No incluir secretos ni documentos reales en Git.

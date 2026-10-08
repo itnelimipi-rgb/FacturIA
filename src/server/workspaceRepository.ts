@@ -4,6 +4,7 @@ import { MatchingEngineService } from '../lib/MatchingEngineService';
 import type { Profile, BankTransaction, CfdiRecord } from '../lib/types';
 import { HttpError } from './http';
 import { cfdiSchema, WORKSPACE_DOCUMENT_LIMIT, WORKSPACE_TRANSACTION_LIMIT } from '../lib/validation';
+import { MAX_WORKSPACE_EXPORT_BYTES } from '../lib/workspaceExport';
 
 export interface WorkspaceSnapshot {profile: Profile | null; transactions: BankTransaction[]; cfdis: CfdiRecord[]}
 type Connection = Pick<PoolClient, 'query' | 'release'>;
@@ -33,6 +34,35 @@ export class WorkspaceRepository {
       // All three reads must describe the same committed state even during imports.
       await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
       const snapshot = await this.load(client, userId);
+      if (snapshot.profile) snapshot.transactions = MatchingEngineService.evaluateBatch(snapshot.transactions, snapshot.cfdis, snapshot.profile);
+      await client.query('COMMIT');
+      return snapshot;
+    } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
+  }
+
+  /** Read one committed owner snapshot, including original XML, without writing or auditing. */
+  async getExport(userId: string): Promise<WorkspaceSnapshot> {
+    const client = await this.database.connect();
+    try {
+      await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      await this.assertWorkspaceLimits(client, userId);
+      // Check the aggregate size in PostgreSQL before materializing potentially
+      // thousands of XML strings in the web process. JSONB formatting plus the
+      // reserved envelope/field overhead intentionally makes this conservative.
+      const size = await client.query<{bytes: string}>(
+        'SELECT 4096 + (SELECT COALESCE(sum(octet_length(payload::text) + 32),0) FROM app_bank_transactions WHERE user_id=$1) + (SELECT COALESCE(sum(octet_length(payload::text) + COALESCE(octet_length(to_jsonb(raw_xml)::text),0) + 32),0) FROM app_documents WHERE user_id=$1) AS bytes', [userId]
+      );
+      if (Number(size.rows[0].bytes) > MAX_WORKSPACE_EXPORT_BYTES) {
+        throw new HttpError(413, 'El respaldo supera el límite de descarga de 25 MiB del piloto.');
+      }
+      const snapshot = await this.load(client, userId);
+      const originals = await client.query<{id: string; raw_xml: string | null}>('SELECT id,raw_xml FROM app_documents WHERE user_id=$1 ORDER BY created_at, id', [userId]);
+      const xmlById = new Map(originals.rows.map(row => [row.id, row.raw_xml]));
+      snapshot.cfdis = snapshot.cfdis.map(document => {
+        const rawXml = xmlById.get(document.id);
+        return rawXml === null || rawXml === undefined ? document : {...document, rawXml};
+      });
       if (snapshot.profile) snapshot.transactions = MatchingEngineService.evaluateBatch(snapshot.transactions, snapshot.cfdis, snapshot.profile);
       await client.query('COMMIT');
       return snapshot;

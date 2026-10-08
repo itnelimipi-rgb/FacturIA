@@ -9,6 +9,7 @@ import { HttpError } from '../src/server/http';
 import { SEED_PROFILE, SEED_CFDIS, SEED_TRANSACTIONS } from '../src/lib/seed';
 import type { BankTransaction, CfdiRecord } from '../src/lib/types';
 import { transactionSchema, cfdiSchema, manualDocumentSchema, snapshotSchema, WORKSPACE_DOCUMENT_LIMIT, WORKSPACE_TRANSACTION_LIMIT } from '../src/lib/validation';
+import { createWorkspaceBackup } from '../src/lib/workspaceExport';
 
 const userA = SEED_PROFILE.id;
 const userB = 'user-other';
@@ -220,6 +221,9 @@ test('get reevaluates obsolete links against current document status without mod
   const read = await repository.get(userA);
   assert.equal(read.transactions[0].status, 'discrepancia');
   assert.equal(read.transactions[0].matchedCfdiId, null);
+  const backup = await repository.getExport(userA);
+  assert.equal(backup.transactions[0].status, 'discrepancia');
+  assert.equal(backup.transactions[0].matchedCfdiId, null);
   const stored = await db.query<{payload: BankTransaction}>('SELECT payload FROM app_bank_transactions WHERE id=$1', [transaction().id]);
   assert.equal(stored.rows[0].payload.status, 'conciliado');
 });
@@ -293,4 +297,44 @@ test('bank amounts enforce cents without removing the six-decimal precision of C
   assert.equal(precise.subtotal, 100.123456);
   assert.equal(precise.iva, 16.019753);
   assert.equal(precise.retenciones, 0.000001);
+});
+
+test('owner backup includes only original XML for the authenticated workspace and performs no database writes', async () => {
+  await createProfile();
+  await createProfile(userB);
+  const ownXml = await readFile(path.resolve('tests/fixtures/sample-cfdi40.xml'), 'utf8');
+  const foreignXml = ownXml.replace('Servicio de prueba', 'Documento privado de otra cuenta');
+  await repository.addDocument(userA, document({statusSat: 'no_verificado'}), ownXml);
+  await repository.addDocument(userA, document({id: 'manual-backup-document', uuidSat: '', sourceType: 'manual', statusSat: 'no_verificado'}));
+  await repository.addTransactions(userA, [transaction()]);
+  await repository.unmatch(userA, transaction().id);
+  await repository.addDocument(userB, document({id: 'foreign-backup-document', userId: userB}), foreignXml);
+  const before = await db.query<{data: unknown}>('SELECT jsonb_build_object(\'documents\',(SELECT jsonb_agg(to_jsonb(d) ORDER BY id) FROM app_documents AS d),\'transactions\',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM app_bank_transactions AS t),\'audit\',(SELECT jsonb_agg(to_jsonb(a) ORDER BY id) FROM app_audit_events AS a)) AS data');
+  const own = await repository.getExport(userA);
+  const backup = createWorkspaceBackup(own, {mode: 'workspace', exportedAt: '2026-10-08T18:00:00.000Z'});
+  assert.equal(backup.profile!.id, userA);
+  assert.equal(backup.cfdis.find(value => value.id === document().id)!.rawXml, ownXml);
+  assert.equal(backup.cfdis.find(value => value.id === document().id)!.statusSat, 'no_verificado');
+  assert.equal(backup.cfdis.find(value => value.id === 'manual-backup-document')!.rawXml, undefined);
+  assert.equal(backup.transactions[0].reconciliationLocked, true);
+  assert.ok(!backup.cfdis.some(value => value.id === 'foreign-backup-document'));
+  assert.ok(!JSON.stringify(backup).includes('Documento privado de otra cuenta'));
+  const other = await repository.getExport(userB);
+  assert.equal(other.cfdis.length, 1);
+  assert.equal(other.cfdis[0].rawXml, foreignXml);
+  assert.deepEqual(other.transactions, []);
+  assert.deepEqual(await repository.getExport('unknown-user'), {profile: null, transactions: [], cfdis: []});
+  assert.ok((await repository.get(userA)).cfdis.every(value => value.rawXml === undefined));
+  const after = await db.query<{data: unknown}>('SELECT jsonb_build_object(\'documents\',(SELECT jsonb_agg(to_jsonb(d) ORDER BY id) FROM app_documents AS d),\'transactions\',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM app_bank_transactions AS t),\'audit\',(SELECT jsonb_agg(to_jsonb(a) ORDER BY id) FROM app_audit_events AS a)) AS data');
+  assert.deepEqual(after.rows[0].data, before.rows[0].data);
+});
+
+test('owner backup preflight rejects aggregate XML size before loading originals and leaves data intact', async () => {
+  await createProfile();
+  await db.query('INSERT INTO app_documents(id,user_id,uuid_sat,payload,raw_xml) SELECT $1 || entry,$2,NULL,$3::jsonb || jsonb_build_object(\'id\',$1 || entry),repeat(\'x\',2000000) FROM generate_series(1,14) AS entry', ['large-backup-', userA, JSON.stringify(document({uuidSat: '', statusSat: 'no_verificado'}))]);
+  const countBefore = await db.query<{count: number}>('SELECT count(*)::int AS count FROM app_audit_events WHERE user_id=$1', [userA]);
+  await assert.rejects(repository.getExport(userA), hasStatus(413));
+  const countAfter = await db.query<{count: number}>('SELECT count(*)::int AS count FROM app_audit_events WHERE user_id=$1', [userA]);
+  assert.equal(countAfter.rows[0].count, countBefore.rows[0].count);
+  assert.equal((await repository.get(userA)).cfdis.length, 14);
 });

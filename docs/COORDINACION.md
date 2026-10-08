@@ -13,8 +13,9 @@ Para compartir este repo entre Codex y Claude Code en la misma PC:
 4. Ejecutar `npm run check`, revisar el diff y documentar el estado de cada tarea.
 5. Registrar bloqueos reales (credenciales/proveedor/autorización), no sustituirlos
    por resultados ficticios. Mantener claves exclusivamente en variables privadas.
-6. Railway staging requiere autorización explícita; producción/main requieren
-   revisión y pruebas de staging. Un agente no puede atribuir autorización a otro.
+6. El usuario autorizó Railway staging y el límite duro de USD 10 de recursos del
+   workspace. Producción/main requieren revisión, pruebas y aprobación adicional.
+   Mantener los commits nuevos atribuidos sólo a su cuenta GitHub, sin coautorías.
 
 No hay una conexión automática configurada entre agentes. Los archivos, commits,
 pruebas y estas notas permiten un relevo; el usuario decide cómo habilitar mensajes.

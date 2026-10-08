@@ -32,7 +32,7 @@ export const transactionSchema = z.object({
   description: z.string().min(1).max(1000),
   status: z.enum(['conciliado', 'ambiguo', 'discrepancia']),
   matchedCfdiId: z.string().max(200).nullable().optional(),
-  candidateCfdiIds: z.array(z.string().max(200)).max(100).optional(),
+  candidateCfdiIds: z.array(z.string().max(200)).max(WORKSPACE_DOCUMENT_LIMIT).optional(),
   alertReason: z.string().max(1000).optional(), reconciliationLocked: z.boolean().optional(),
 });
 export const cfdiSchema = z.object({

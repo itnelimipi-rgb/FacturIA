@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { BankCsvImport } from '../components/BankCsvImport';
+import { WorkspaceExportControls } from './WorkspaceExportControls';
 import { CashFlowShield } from '../components/CashFlowShield';
 import { UnifiedDropzone } from '../components/UnifiedDropzone';
 import { TreasuryInbox } from '../components/TreasuryInbox';
@@ -241,6 +242,8 @@ export default function FacturiaDashboard({ mode = 'demo', initialSnapshot }: { 
             </span>
           </div>
         </section>
+
+        <WorkspaceExportControls mode={mode} snapshot={{profile, transactions, cfdis}} />
 
         {/* ==================== TAB 1: PANEL ==================== */}
         {activeTab === 'panel' && (
