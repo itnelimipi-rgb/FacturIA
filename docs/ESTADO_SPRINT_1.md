@@ -50,20 +50,30 @@ para recursos de todo el workspace.
 - [Demo](https://web-staging-b090.up.railway.app/demo) y
   [espacio personal](https://web-staging-b090.up.railway.app/workspace) disponibles
   en el proyecto `facturia-staging`, entorno `staging`.
-- Deployment exacto `9d12f65d-5b19-4bed-a526-33c435611986`: **SUCCESS**, fijado al
-  commit `9d77aed58919e59366b9e742cdac5f3868635448` de `sprint-1`. Su
-  [CI en GitHub](https://github.com/itnelimipi-rgb/FacturIA/actions/runs/37864970640)
-  pasó. Los logs confirmaron `Migración aplicada: 001_workspace.sql`;
+- Deployment exacto `201f3e6b-e8ae-41ad-965e-3865a5c13813`: **SUCCESS**, fijado al
+  commit `2916f18f2ae014e3ebac3d1b368db90d1b8869f4` de `sprint-1`. Su
+  [CI en GitHub](https://github.com/itnelimipi-rgb/FacturIA/actions/runs/37875161206)
+  pasó. Predeploy ejecutó `db:migrate` con el esquema ya aplicado;
   `/api/health` respondió HTTP 200 en modo `workspace`.
-- **15 comprobaciones HTTP externas**: 11 del flujo inicial y cuatro después de
-  reiniciar el servicio web. Se verificaron cookies `Secure`, `HttpOnly` y
+- **15 comprobaciones HTTP externas de la primera versión**: 11 del flujo
+  inicial y cuatro después de reiniciar el servicio web. Se verificaron cookies `Secure`, `HttpOnly` y
   `SameSite`, dos cuentas aisladas, origen/CSRF, identidad de sesión,
   pertenencia del XML, duplicados XML/CSV, conciliación y desvinculación,
   gastos provisionales, exportación propia con XML originales y logout.
-- Reinicio del web observado a `2026-10-09T01:05:06Z`, sin reiniciar PostgreSQL.
-  Nuevas sesiones de las mismas cuentas conservaron perfiles, documentos,
-  movimientos y conciliación. Esta prueba acredita persistencia tras reiniciar
-  la aplicación; no acredita recuperación de la base desde un respaldo.
+- **Cuatro comprobaciones de las cuentas anteriores tras actualizar staging**:
+  nuevas sesiones recuperan los perfiles, documentos, movimientos y XML privados.
+- **13 comprobaciones HTTPS de restauración y cuatro tras reiniciar web**:
+  respaldos de cuenta y RFC válidos, sesión/origen, vista previa sin escritura,
+  rechazo de destino ocupado y XML corrupto, guardado único ante dos solicitudes
+  simultáneas, documentos propios, XML original exportable, vínculo y pausa
+  preservados, CSV reimportado sin duplicar y logout. Esto suma **36 comprobaciones
+  externas de los scripts**, incluidas las 15 de la primera versión.
+- Reinicio de este deployment observado a `2026-10-09T02:56:13Z`, sin reiniciar
+  PostgreSQL. Los registros restaurados persistieron con nuevas sesiones. La
+  prueba acredita recuperación JSON de documentos/movimientos y persistencia de
+  la aplicación; no acredita recuperación completa de la base PostgreSQL.
+- `/demo` y `/workspace` respondieron HTTP 200/HTML. La demo no incorpora los
+  controles de restauración del espacio personal; esto no sustituye revisión visual.
 - Una instancia web con 500 MB RAM/0.5 CPU y suspensión automática; PostgreSQL
   privado con 250 MB RAM/0.25 CPU y volumen persistente de 5000 MB, sin TCP público.
 
@@ -74,11 +84,11 @@ revisar checks, actualizar el pin sólo en staging y comprobar ese deployment.
 ## Pendiente antes de main
 
 - Confirmar CI en GitHub para el commit final que se proponga promover a main.
-- Completar verificación HTTP externa de la restauración JSON y ensayar
-  backup/restore completo de PostgreSQL; comprobar concurrencia y carga antes
-  de admitir datos reales.
+- Ensayar backup/restore completo de PostgreSQL y medir carga antes de admitir
+  datos reales. La concurrencia de dos restauraciones ya quedó comprobada.
 - Prueba visual completa de demo y espacio autenticado. El control del navegador
-  local fue bloqueado por su política de acceso; no se da por comprobada.
+  local fue bloqueado por su política de acceso y el controlador de staging
+  falló al inicializar sus recursos; no se da por comprobada.
 - Configurar SMTP/invitaciones para ampliar el piloto; almacenar el rate limit
   compartido antes de escalar a varias instancias.
 - Revisar limitaciones y obtener aprobación del usuario para promover a main.

@@ -76,12 +76,12 @@ misma suite. Los fixtures son sintéticos y no tienen validez fiscal.
 ## Estado y próximo avance
 
 Pasaron **193 pruebas locales**, lint, TypeScript y build. El staging ejecuta el
-commit `9d77aed58919e59366b9e742cdac5f3868635448`: migración aplicada, healthcheck
-funcional y **15 comprobaciones HTTP externas** aprobadas, incluidas cuatro
-después de reiniciar el servicio web para verificar persistencia. Su
-[CI en GitHub](https://github.com/itnelimipi-rgb/FacturIA/actions/runs/37864970640)
-también pasó. La restauración JSON ya tiene pruebas de validación, aislamiento y
-rollback; falta completar su verificación externa, la revisión visual y la
+commit `2916f18f2ae014e3ebac3d1b368db90d1b8869f4`: esquema migrado y healthcheck
+funcional. Hay **36 comprobaciones HTTP externas** documentadas, incluidas
+**17 de restauración JSON** con concurrencia, reimportación CSV y persistencia
+después del reinicio del servicio web. Su
+[CI en GitHub](https://github.com/itnelimipi-rgb/FacturIA/actions/runs/37875161206)
+también pasó. Falta la revisión visual completa, pruebas de carga y la
 recuperación completa de PostgreSQL desde un respaldo.
 
 Leer [estado del sprint](docs/ESTADO_SPRINT_1.md), [plan de avance](docs/PLAN_AVANCE.md),

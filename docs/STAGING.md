@@ -11,7 +11,7 @@ También hay PostgreSQL local aislado para desarrollar sin depender de staging.
 - Proyecto nuevo: `facturia-staging`.
 - Entorno: `staging` (aislado de cualquier proyecto y servicio existente).
 - Servicio aplicación: `web`, una instancia Node 22, fuente `sprint-1` fijada al
-  commit `9d77aed58919e59366b9e742cdac5f3868635448`, límite 500 MB RAM y 0.5 CPU,
+  commit `2916f18f2ae014e3ebac3d1b368db90d1b8869f4`, límite 500 MB RAM y 0.5 CPU,
   con suspensión automática habilitada.
 - Servicio datos: PostgreSQL 18, una instancia, límite 250 MB RAM y 0.25 CPU,
   volumen persistente de 5000 MB y red privada, sin proxy TCP público.
@@ -27,11 +27,11 @@ y [espacio personal](https://web-staging-b090.up.railway.app/workspace). Consult
 
 ## Despliegue y evidencia
 
-- Deployment `9d12f65d-5b19-4bed-a526-33c435611986`: **SUCCESS**, commit
-  `9d77aed58919e59366b9e742cdac5f3868635448` de `sprint-1`, creado con la cuenta
-  asociada del usuario. La [ejecución de CI](https://github.com/itnelimipi-rgb/FacturIA/actions/runs/37864970640)
+- Deployment `201f3e6b-e8ae-41ad-965e-3865a5c13813`: **SUCCESS**, commit
+  `2916f18f2ae014e3ebac3d1b368db90d1b8869f4` de `sprint-1`, creado con la cuenta
+  asociada del usuario. La [ejecución de CI](https://github.com/itnelimipi-rgb/FacturIA/actions/runs/37875161206)
   de ese commit terminó correctamente.
-- Logs de predeploy: `Migración aplicada: 001_workspace.sql`. `/api/health`
+- Predeploy ejecutó `db:migrate` sobre el esquema ya aplicado. `/api/health`
   responde HTTP 200 con `{"status":"ok","mode":"workspace"}`.
 - **11 comprobaciones HTTP iniciales**: acceso autenticado, registro de dos
   cuentas, contraseña incorrecta, cookies HTTPS `Secure`/`HttpOnly`/`SameSite`,
@@ -43,8 +43,21 @@ y [espacio personal](https://web-staging-b090.up.railway.app/workspace). Consult
   cierre de esas sesiones. El reinicio se observó a
   `2026-10-09T01:05:06Z`; PostgreSQL no se reinició. Se conservaron los perfiles,
   XML, movimientos y vínculos. Esto suma **15 comprobaciones externas**.
+- Cuatro comprobaciones de las cuentas anteriores tras esta actualización
+  confirmaron que los perfiles, documentos, movimientos y exportaciones siguen
+  disponibles en sus propias sesiones.
+- **13 comprobaciones HTTPS de restauración JSON**, con cuatro cuentas sintéticas:
+  RFC, propiedad, sesión/origen, vista previa sin escritura, rechazos sin cambios,
+  dos solicitudes concurrentes guardando una sola copia, perfil conservado,
+  XML reparsado, vínculos y pausas restaurados y CSV reimportado sin duplicar.
+- **Cuatro comprobaciones posteriores al reinicio del nuevo deployment**, cuyo
+  arranque se observó a `2026-10-09T02:56:13Z`: XML originales, documentos,
+  movimientos, vínculos, pausas y propietarios restaurados persisten. PostgreSQL
+  no se reinició. Los scripts suman **36 comprobaciones externas** con las
+  15 anteriores. `/demo` y `/workspace` también respondieron HTTP 200/HTML.
 - Todas las cuentas y documentos de esta verificación son sintéticos. La revisión
-  visual, pruebas de carga y restauración de respaldos siguen pendientes.
+  visual, carga y recuperación completa de PostgreSQL siguen pendientes. La
+  restauración JSON recupera registros de negocio, no cuentas, sesiones ni auditoría.
 
 El servicio permanece fijado al SHA probado. Publicar nuevos commits en
 `sprint-1` sirve como punto de guardado; no produce despliegues automáticos.
@@ -90,9 +103,12 @@ el estado privado de verificación en `node_modules/.cache`, ignorado por Git.
 7. Importar `tests/fixtures/sample-bank.csv`; comprobar vínculo y repetir importación
    para probar idempotencia. Probar XML repetido, error de filas y manual sin UUID.
 8. Probar aislamiento, logout, credenciales equivocadas, reinicio y persistencia.
-9. Comprobar exportación JSON con XML propios. La importación/restauración de ese
-   JSON está pendiente y debe implementarse y ensayarse antes de admitir datos
-   reales. Documentar hallazgos; no promover automáticamente.
+9. Comprobar exportación JSON con XML propios y ejecutar
+   `scripts/verify-restore-http.mjs` con `--base-url` del staging y `--state`
+   dentro de `node_modules/.cache`. Hace 13 comprobaciones; tras reiniciar sólo
+   web, repetir con `--verify-only` para cuatro comprobaciones de persistencia.
+   El script respeta la respuesta 429 y la espera indicada para registrar cuentas,
+   sin debilitar el rate limit. Documentar hallazgos; no promover automáticamente.
 
 La migración `db/migrations` es para PostgreSQL independiente. El esquema antiguo
 `supabase/migrations` queda como referencia histórica; no se aplica en Railway.
@@ -100,7 +116,9 @@ La migración `db/migrations` es para PostgreSQL independiente. El esquema antig
 ## Límites actuales
 
 La verificación HTTP externa cubre los flujos descritos, no una aprobación para
-producción. Falta revisar la interfaz, probar carga y ensayar backup/restore.
+producción. Falta revisar la interfaz, probar carga y ensayar backup/restore
+completo de PostgreSQL. La restauración JSON sólo admite un espacio vacío con
+perfil del mismo RFC, respaldos de cuenta y XML originales o documentos manuales.
 El proveedor de IA/OCR, SMTP, WhatsApp, bancos y SAT aún no está conectado.
 La primera etapa no calcula deducciones ni emite CFDI. El rate limit de
 autenticación en memoria requiere una sola instancia; configurar almacenamiento
