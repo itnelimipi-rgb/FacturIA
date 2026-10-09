@@ -28,6 +28,9 @@ yarn-error.log*
 .env*.local
 .env
 
+# Private local database and setup files
+.facturia-local/
+
 # Vercel
 .vercel
 

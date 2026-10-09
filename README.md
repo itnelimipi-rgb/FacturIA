@@ -2,6 +2,8 @@
 
 Conciliación documental de movimientos bancarios y CFDI. Desarrollo en `sprint-1`;
 la promoción a `main` requiere pruebas en staging y aprobación del usuario.
+Los avances se publican como puntos de guardado en esa rama del repositorio
+público, con la cuenta `d1512pb` y sin coautores de IA. `main` continúa intacto.
 
 ## Modos
 
@@ -9,6 +11,9 @@ la promoción a `main` requiere pruebas en staging y aprobación del usuario.
   navegador. Funciona sin base de datos; **Reset demo** restablece los ejemplos.
 - `/workspace`: cuentas, sesiones, perfil y registros persistentes en PostgreSQL.
   Requiere configurar la base y autenticación; comienza vacío por usuario.
+
+El staging está activo con datos sintéticos: [demo](https://web-staging-b090.up.railway.app/demo)
+y [espacio personal](https://web-staging-b090.up.railway.app/workspace).
 
 ## Funciones implementadas
 
@@ -66,11 +71,20 @@ npm start
 producción. Los scripts históricos de `tests/run_verification` delegan en la
 misma suite. Los fixtures son sintéticos y no tienen validez fiscal.
 
-## Próximo avance
+## Estado y próximo avance
 
-Leer [plan de avance](docs/PLAN_AVANCE.md), [propuesta de staging](docs/STAGING.md)
-y [coordinación con Claude Code](docs/COORDINACION.md). `railway.json` prepara
-build, migración y healthcheck. Staging está autorizado con límite duro de USD 10
-para recursos del workspace; su validación externa está en curso. El
-[entorno PostgreSQL local](docs/DESARROLLO_LOCAL.md) permite desarrollar en la PC.
-No incluir secretos ni documentos reales en Git.
+Pasaron **166 pruebas locales**, lint, TypeScript y build. El staging ejecuta el
+commit `9d77aed58919e59366b9e742cdac5f3868635448`: migración aplicada, healthcheck
+funcional y **15 comprobaciones HTTP externas** aprobadas, incluidas cuatro
+después de reiniciar el servicio web para verificar persistencia. Su
+[CI en GitHub](https://github.com/itnelimipi-rgb/FacturIA/actions/runs/37864970640)
+también pasó. Falta la revisión visual completa y ensayar restauración de respaldos.
+
+Leer [estado del sprint](docs/ESTADO_SPRINT_1.md), [plan de avance](docs/PLAN_AVANCE.md),
+[staging](docs/STAGING.md) y [coordinación con Claude Code](docs/COORDINACION.md).
+`railway.json` configura build, migración y healthcheck. Railway mantiene un
+límite duro de USD 10 para recursos de todo el workspace. El servicio está
+fijado al commit probado; publicar nuevos puntos de guardado no lo redespliega
+automáticamente. El [entorno PostgreSQL local](docs/DESARROLLO_LOCAL.md) permite
+desarrollar en la PC. La restauración del JSON todavía no está habilitada.
+No incluir secretos ni documentos reales en Git ni admitir datos reales en este piloto.

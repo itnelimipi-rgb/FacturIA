@@ -9,12 +9,14 @@ del staging autorizado en Railway. Las pruebas de cuentas usan datos sintéticos
 - Demo: `/demo`; espacio con cuentas: `/workspace`.
 - PostgreSQL: sólo `127.0.0.1:54329`.
 - Base propia: `facturia_staging`; rol de aplicación: `facturia_app`.
-- Cluster y registros: `node_modules/.cache/facturia-postgres/` (ignorado por Git).
+- Cluster y registros: `.facturia-local/postgres/` (ignorado por Git).
 - Conexión y secreto de sesiones: `.env.local` (ignorado por Git).
 
 El rol de aplicación no es superusuario. Las credenciales se generan localmente;
 no están en este documento ni en el repositorio. El servidor se inicia como
 proceso local y no registra un servicio global de Windows.
+El cluster está fuera de `node_modules` para que reinstalar dependencias no borre
+la base. No eliminar `.facturia-local` al limpiar archivos de desarrollo.
 
 ## Ejecución
 
@@ -54,8 +56,8 @@ Estos comandos corresponden exclusivamente al cluster local de FacturIA.
 Requieren los binarios PostgreSQL 18 instalados en la PC y ejecutar desde el repo:
 
 ```powershell
-$facturiaPgData = Join-Path (Get-Location) 'node_modules/.cache/facturia-postgres/data'
-$facturiaPgLog = Join-Path (Get-Location) 'node_modules/.cache/facturia-postgres/postgres.log'
+$facturiaPgData = Join-Path (Get-Location) '.facturia-local/postgres/data'
+$facturiaPgLog = Join-Path (Get-Location) '.facturia-local/postgres/postgres.log'
 & 'C:\Program Files\PostgreSQL\18\bin\pg_ctl.exe' -D $facturiaPgData status
 & 'C:\Program Files\PostgreSQL\18\bin\pg_ctl.exe' -D $facturiaPgData -l $facturiaPgLog -w start
 ```
@@ -63,6 +65,7 @@ $facturiaPgLog = Join-Path (Get-Location) 'node_modules/.cache/facturia-postgres
 Para detenerlo conservando sus datos:
 
 ```powershell
+$facturiaPgData = Join-Path (Get-Location) '.facturia-local/postgres/data'
 & 'C:\Program Files\PostgreSQL\18\bin\pg_ctl.exe' -D $facturiaPgData -m fast -w stop
 ```
 
