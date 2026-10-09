@@ -42,8 +42,9 @@ const exportOptionsSchema = z.object({
  * JSON format v1: format, version, exportedAt (UTC), mode, profile, transactions, cfdis.
  * Known fields are copied through the shared schemas; extra keys are discarded at
  * every record level. rawXml is optional and preserved verbatim when available.
- * SAT/EFOS metadata is copied, never verified or upgraded by exporting. This format
- * currently supports downloading a backup only; importing/restoring it is not enabled.
+ * SAT/EFOS metadata is copied, never verified or upgraded by exporting. Workspace
+ * backups can be restored to an empty authenticated workspace with the same RFC;
+ * the server revalidates originals and reconciliation before storing them.
  */
 export function createWorkspaceBackup(snapshot: WorkspaceExportSnapshot, options: WorkspaceExportOptions) {
   const safe = exportSnapshotSchema.parse(snapshot);

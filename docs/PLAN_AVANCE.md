@@ -39,6 +39,10 @@ se suman monedas distintas. Flujo visual demo revisado.
   `staging`, dominio automático Railway. Autorizado el 8 de octubre de 2026 con
   límite duro de USD 10 para recursos del workspace.
 - Usar exclusivamente datos sintéticos en el primer despliegue.
+- Restaurar respaldos JSON v1 en un espacio vacío del mismo RFC: vista previa,
+  validación servidor, XML original y guardado atómico. Conservar decisiones
+  válidas y pausas sin permitir sobrescritura ni confundirlo con recuperación
+  completa de la base PostgreSQL.
 
 Criterio de salida: dos cuentas aisladas, reinicio conserva registros,
 importación/resolución/desvinculación funcionan, sesión inválida recibe 401,

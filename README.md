@@ -25,6 +25,8 @@ y [espacio personal](https://web-staging-b090.up.railway.app/workspace).
   desvinculación y reanudación de búsqueda.
 - Gastos manuales provisionales, sin inventar UUID ni timbre.
 - Descarga de respaldo JSON propio con XML originales y reporte CSV de movimientos.
+- Restauración JSON v1 con vista previa, mismo RFC y espacio vacío; XML revalidado,
+  perfil conservado y guardado completo en una transacción.
 - Indicadores derivados de registros, separados por moneda, y asistente por
   reglas que resume los datos disponibles.
 - Autenticación, aislamiento por usuario, restricciones SQL, transacciones y
@@ -73,12 +75,14 @@ misma suite. Los fixtures son sintéticos y no tienen validez fiscal.
 
 ## Estado y próximo avance
 
-Pasaron **166 pruebas locales**, lint, TypeScript y build. El staging ejecuta el
+Pasaron **193 pruebas locales**, lint, TypeScript y build. El staging ejecuta el
 commit `9d77aed58919e59366b9e742cdac5f3868635448`: migración aplicada, healthcheck
 funcional y **15 comprobaciones HTTP externas** aprobadas, incluidas cuatro
 después de reiniciar el servicio web para verificar persistencia. Su
 [CI en GitHub](https://github.com/itnelimipi-rgb/FacturIA/actions/runs/37864970640)
-también pasó. Falta la revisión visual completa y ensayar restauración de respaldos.
+también pasó. La restauración JSON ya tiene pruebas de validación, aislamiento y
+rollback; falta completar su verificación externa, la revisión visual y la
+recuperación completa de PostgreSQL desde un respaldo.
 
 Leer [estado del sprint](docs/ESTADO_SPRINT_1.md), [plan de avance](docs/PLAN_AVANCE.md),
 [staging](docs/STAGING.md) y [coordinación con Claude Code](docs/COORDINACION.md).
@@ -86,5 +90,6 @@ Leer [estado del sprint](docs/ESTADO_SPRINT_1.md), [plan de avance](docs/PLAN_AV
 límite duro de USD 10 para recursos de todo el workspace. El servicio está
 fijado al commit probado; publicar nuevos puntos de guardado no lo redespliega
 automáticamente. El [entorno PostgreSQL local](docs/DESARROLLO_LOCAL.md) permite
-desarrollar en la PC. La restauración del JSON todavía no está habilitada.
+desarrollar en la PC. La restauración acepta respaldos de cuentas, con XML
+originales y documentos manuales; no importa respaldos de la demostración.
 No incluir secretos ni documentos reales en Git ni admitir datos reales en este piloto.

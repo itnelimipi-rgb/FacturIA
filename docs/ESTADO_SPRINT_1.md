@@ -8,7 +8,7 @@ para recursos de todo el workspace.
 
 ## Verificado localmente
 
-- `npm run check`: lint, TypeScript, **166 pruebas** y build de producción pasan.
+- `npm run check`: lint, TypeScript, **193 pruebas** y build de producción pasan.
 - `npm audit`: cero vulnerabilidades conocidas reportadas, incluidas dependencias
   de desarrollo, en la consulta de esta fecha.
 - XML originales, CSV con centavos/fechas reales, perfil, gastos provisionales,
@@ -30,6 +30,20 @@ para recursos de todo el workspace.
   tras mover el cluster y reiniciar la aplicación; `.env.local` no cambió.
 - Una regresión de 101 CFDI candidatos confirma que contratos y exportaciones
   admiten ambigüedades dentro del límite acumulado de documentos.
+- Restauración JSON v1 con vista previa y confirmación, perfil del mismo RFC y
+  espacio vacío. Se reparsan XML, recalculan importes y conciliaciones, preservan
+  pausas/alertas y descartan credenciales. La cuenta actual conserva su perfil.
+- Guardado de restauración atómico con bloqueo por cuenta y una entrada de
+  auditoría. Pruebas SQL verifican que un conflicto tardío revierta documentos,
+  movimientos y auditoría, y que otra importación posterior a la vista previa
+  impida sobrescribir datos. Los IDs CSV reconocidos conservan deduplicación
+  al migrar a otra cuenta del mismo RFC, incluidas filas repetidas legítimas.
+- PostgreSQL local: **13 comprobaciones HTTP de restauración** y **cuatro tras
+  reiniciar la aplicación**. La vista previa no escribe; dos solicitudes
+  simultáneas guardan una sola copia. Reimportar el CSV conserva IDs, vínculos y
+  pausas. Nuevas sesiones después del reinicio recuperan el XML original y los
+  registros restaurados. El script `scripts/verify-restore-http.mjs` repite este
+  ensayo con cuentas sintéticas y estado privado ignorado por Git.
 
 ## Verificado en Railway
 
@@ -60,8 +74,9 @@ revisar checks, actualizar el pin sólo en staging y comprobar ese deployment.
 ## Pendiente antes de main
 
 - Confirmar CI en GitHub para el commit final que se proponga promover a main.
-- Implementar importación/restauración de respaldos JSON y ensayar backup/restore
-  de PostgreSQL; comprobar concurrencia y carga antes de admitir datos reales.
+- Completar verificación HTTP externa de la restauración JSON y ensayar
+  backup/restore completo de PostgreSQL; comprobar concurrencia y carga antes
+  de admitir datos reales.
 - Prueba visual completa de demo y espacio autenticado. El control del navegador
   local fue bloqueado por su política de acceso; no se da por comprobada.
 - Configurar SMTP/invitaciones para ampliar el piloto; almacenar el rate limit

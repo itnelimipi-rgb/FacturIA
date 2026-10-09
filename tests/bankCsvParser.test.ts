@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MAX_BANK_CSV_ROWS, parseBankCsv } from '../src/lib/bankCsvParser';
+import { bankCsvTransactionId, MAX_BANK_CSV_ROWS, parseBankCsv } from '../src/lib/bankCsvParser';
 
 const context = { userId: 'user-1', accountId: 'account-1' };
 
@@ -38,6 +38,14 @@ test('stable IDs retain identical rows as distinct movements and prevent duplica
   const otherUser = parseBankCsv(text, { ...context, userId: 'user-2' }).transactions;
   assert.notEqual(first[0].id, otherAccount[0].id);
   assert.notEqual(first[0].id, otherUser[0].id);
+});
+
+test('canonical CSV ID helper retains published legacy IDs for repeated Unicode bank rows', () => {
+  const text = 'fecha,descripcion,monto\n2026-10-08,Comisión,-100\n2026-10-08,Comisión,-100';
+  const rows = parseBankCsv(text, context).transactions;
+  const expected = ['bank-csv-4c99ca28af9a1fd4', 'bank-csv-4d99cbbb724cce11'];
+  assert.deepEqual(rows.map(transaction => transaction.id), expected);
+  assert.deepEqual(rows.map((transaction, occurrence) => bankCsvTransactionId(context, transaction, occurrence)), expected);
 });
 
 test('rejects impossible dates and imports nothing when any row is invalid', () => {

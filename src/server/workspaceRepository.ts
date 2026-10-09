@@ -1,18 +1,16 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { MatchingEngineService } from '../lib/MatchingEngineService';
 import type { Profile, BankTransaction, CfdiRecord } from '../lib/types';
 import { HttpError } from './http';
 import { cfdiSchema, WORKSPACE_DOCUMENT_LIMIT, WORKSPACE_TRANSACTION_LIMIT } from '../lib/validation';
 import { MAX_WORKSPACE_EXPORT_BYTES } from '../lib/workspaceExport';
+import { prepareWorkspaceRestore, type PreparedWorkspaceRestore } from './workspaceRestore';
+export { namespacedTransactionId } from './recordIds';
 
 export interface WorkspaceSnapshot {profile: Profile | null; transactions: BankTransaction[]; cfdis: CfdiRecord[]}
 type Connection = Pick<PoolClient, 'query' | 'release'>;
 type Database = Pick<Pool, 'connect'>;
-
-export function namespacedTransactionId(userId: string, importedId: string): string {
-  return `bank-${createHash('sha256').update(JSON.stringify([userId, importedId])).digest('hex')}`;
-}
 
 export class WorkspaceRepository {
   constructor(private readonly database: Database) {}
@@ -78,6 +76,47 @@ export class WorkspaceRepository {
       }
       await client.query('INSERT INTO app_profiles(user_id,rfc,business_name,regime_code) VALUES($1,$2,$3,$4) ON CONFLICT(user_id) DO UPDATE SET business_name=$3,regime_code=$4', [userId, input.rfc, input.businessName, input.regimeCode]);
     });
+  }
+
+  /** Validate a recovery against a committed snapshot without changing the database. */
+  async previewRestore(userId: string, backup: unknown) {
+    const snapshot = await this.get(userId);
+    const prepared = this.prepareRestore(snapshot, backup);
+    return {
+      rfc: prepared.profile.rfc,
+      documents: prepared.cfdis.length,
+      transactions: prepared.transactions.length,
+      lockedTransactions: prepared.transactions.filter(transaction => transaction.reconciliationLocked).length,
+      matchedTransactions: prepared.transactions.filter(transaction => transaction.status === 'conciliado').length,
+    };
+  }
+
+  /** Recover into an empty workspace; the owner lock also prevents concurrent overwrites. */
+  async restore(userId: string, backup: unknown) {
+    return this.mutate(userId, 'workspace_restored', async client => {
+      // Repeat every eligibility check inside the transaction. A preview is not
+      // permission to replace data imported in another tab in the meantime.
+      const prepared = this.prepareRestore(await this.load(client, userId), backup);
+      if (prepared.cfdis.length) {
+        const documents = prepared.cfdis.map(document => {
+          const {rawXml, ...payload} = document;
+          return {id: document.id, uuid_sat: document.uuidSat || null, payload, raw_xml: rawXml ?? null};
+        });
+        await client.query('INSERT INTO app_documents(id,user_id,uuid_sat,payload,raw_xml) SELECT record.id,$1,record.uuid_sat,record.payload,record.raw_xml FROM jsonb_to_recordset($2::jsonb) AS record(id text,uuid_sat uuid,payload jsonb,raw_xml text)', [userId, JSON.stringify(documents)]);
+      }
+      if (prepared.transactions.length) {
+        const records = prepared.transactions.map(transaction => ({id: transaction.id, payload: transaction}));
+        await client.query('INSERT INTO app_bank_transactions(id,user_id,payload) SELECT record.id,$1,record.payload FROM jsonb_to_recordset($2::jsonb) AS record(id text,payload jsonb)', [userId, JSON.stringify(records)]);
+      }
+    });
+  }
+
+  private prepareRestore(snapshot: WorkspaceSnapshot, backup: unknown): PreparedWorkspaceRestore {
+    if (!snapshot.profile) throw new HttpError(409, 'Configura primero tu perfil fiscal con el RFC del respaldo');
+    if (snapshot.cfdis.length || snapshot.transactions.length) {
+      throw new HttpError(409, 'La restauración requiere un espacio vacío. Tus datos actuales se conservan.');
+    }
+    return prepareWorkspaceRestore(backup, snapshot.profile);
   }
 
   async addDocument(userId: string, document: CfdiRecord, rawXml?: string) {

@@ -14,6 +14,11 @@ export interface BankCsvResult {
   delimiter: ',' | ';';
 }
 
+export interface BankCsvContext {
+  userId: string;
+  accountId: string;
+}
+
 interface CsvRow {
   line: number;
   cells: string[];
@@ -106,8 +111,18 @@ function stableHash(value: string): string {
   return (hash1 >>> 0).toString(16).padStart(8, '0') + (hash2 >>> 0).toString(16).padStart(8, '0');
 }
 
+/** Preserve the original normalized CSV identity, including identical-row ordinal. */
+export function bankCsvTransactionId(
+  context: BankCsvContext,
+  fields: Pick<BankTransaction, 'date' | 'description' | 'amount' | 'currency'>,
+  occurrence: number,
+): string {
+  const key = JSON.stringify([context.userId, context.accountId, fields.date, fields.description, fields.amount, fields.currency]);
+  return `bank-csv-${stableHash(`${key}:${occurrence}`)}`;
+}
+
 /** CSV normalizado: fecha,descripcion,monto[,moneda]. No infiere importes ni formatos bancarios. */
-export function parseBankCsv(text: string, context: { userId: string; accountId: string }): BankCsvResult {
+export function parseBankCsv(text: string, context: BankCsvContext): BankCsvResult {
   const result: BankCsvResult = { transactions: [], errors: [], delimiter: ',' };
   const fail = (message: string, row = 1) => {
     result.errors.push({ row, message });
@@ -162,7 +177,7 @@ export function parseBankCsv(text: string, context: { userId: string; accountId:
     const occurrence = occurrences.get(key) || 0;
     occurrences.set(key, occurrence + 1);
     result.transactions.push({
-      id: `bank-csv-${stableHash(`${key}:${occurrence}`)}`,
+      id: bankCsvTransactionId(context, {date: date!, description, amount: normalizedAmount, currency}, occurrence),
       userId: context.userId,
       accountId: context.accountId,
       date: date!,

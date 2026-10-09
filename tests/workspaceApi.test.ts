@@ -10,6 +10,7 @@ import { POST as authPost } from '../src/app/api/auth/[...all]/route';
 import { GET as workspaceGet, POST as workspacePost } from '../src/app/api/workspace/route';
 import { GET as health } from '../src/app/api/health/route';
 import { GET as workspaceExport } from '../src/app/api/workspace/export/route';
+import { POST as workspaceRestore } from '../src/app/api/workspace/restore/route';
 import { parseBankCsv } from '../src/lib/bankCsvParser';
 import type { WorkspaceSnapshot } from '../src/server/workspaceRepository';
 import type { createWorkspaceBackup } from '../src/lib/workspaceExport';
@@ -84,6 +85,80 @@ async function csv(cookie: string, userId = 'spoofed-client-user', contents = ra
   assert.deepEqual(parsed.errors, []);
   return workspacePost(request('/api/workspace', {action: 'transactions', transactions: parsed.transactions}, cookie));
 }
+
+test('authenticated restore previews without writes and reowns a backup while preserving the destination profile', async () => {
+  const first = await register('restore-source@example.test');
+  const second = await register('restore-destination@example.test');
+  await profile(first.cookie);
+  const destination = await profile(second.cookie, 'XAXX010101000', 'Perfil destino conservado');
+  await xml(first.cookie);
+  await csv(first.cookie);
+  const backup = await (await workspaceExport(request('/api/workspace/export', undefined, first.cookie))).json() as ReturnType<typeof createWorkspaceBackup>;
+  backup.cfdis[0].statusSat = 'vigente';
+  backup.cfdis[0].total = 999;
+  const body = {action: 'preview', backup, userId: first.id};
+  const preview = await workspaceRestore(request('/api/workspace/restore', body, second.cookie));
+  assert.equal(preview.status, 200);
+  assert.equal(preview.headers.get('cache-control'), 'no-store');
+  const summary = await preview.json();
+  assert.equal(summary.preview.documents, 1);
+  assert.equal(summary.preview.matchedTransactions, 1);
+  assert.deepEqual(await (await read(second.cookie)).json(), destination);
+  const response = await workspaceRestore(request('/api/workspace/restore', {...body, action: 'restore'}, second.cookie));
+  assert.equal(response.status, 200);
+  const restored = await response.json() as WorkspaceSnapshot;
+  assert.deepEqual(restored.profile, destination.profile);
+  assert.equal(restored.cfdis[0].userId, second.id);
+  assert.equal(restored.cfdis[0].total, 116);
+  assert.equal(restored.cfdis[0].statusSat, 'no_verificado');
+  assert.equal(restored.transactions[0].matchedCfdiId, restored.cfdis[0].id);
+  assert.equal((await workspaceRestore(request('/api/workspace/restore', {...body, action: 'restore'}, second.cookie))).status, 409);
+  const exported = await (await workspaceExport(request('/api/workspace/export', undefined, second.cookie))).json() as ReturnType<typeof createWorkspaceBackup>;
+  assert.equal(exported.cfdis[0].rawXml, rawXml);
+  const original = await (await read(first.cookie)).json() as WorkspaceSnapshot;
+  assert.equal(original.cfdis[0].userId, first.id);
+  assert.notEqual(original.cfdis[0].id, restored.cfdis[0].id);
+});
+
+test('restore enforces authentication, same origin, existing profile and matching RFC', async () => {
+  const first = await register('restore-owner@example.test');
+  const second = await register('restore-other@example.test');
+  await profile(first.cookie);
+  await xml(first.cookie);
+  const backup = await (await workspaceExport(request('/api/workspace/export', undefined, first.cookie))).json();
+  const body = {action: 'restore', backup};
+  assert.equal((await workspaceRestore(request('/api/workspace/restore', body))).status, 401);
+  assert.equal((await workspaceRestore(request('/api/workspace/restore', body, second.cookie, 'https://evil.example'))).status, 403);
+  assert.equal((await workspaceRestore(request('/api/workspace/restore', body, second.cookie))).status, 409);
+  await profile(second.cookie, 'XEXX010101000');
+  assert.equal((await workspaceRestore(request('/api/workspace/restore', body, second.cookie))).status, 400);
+  const other = await (await read(second.cookie)).json() as WorkspaceSnapshot;
+  assert.deepEqual(other.cfdis, []);
+  assert.deepEqual(other.transactions, []);
+});
+
+test('invalid or oversized restore bodies fail without importing any records', async () => {
+  const first = await register('restore-invalid-source@example.test');
+  const second = await register('restore-invalid-destination@example.test');
+  await profile(first.cookie);
+  await profile(second.cookie);
+  await xml(first.cookie);
+  const backup = await (await workspaceExport(request('/api/workspace/export', undefined, first.cookie))).json() as ReturnType<typeof createWorkspaceBackup>;
+  for (const invalid of [
+    {...backup, mode: 'demo'},
+    {...backup, cfdis: [{...backup.cfdis[0], rawXml: '<broken-xml/>'}]},
+    {...backup, cfdis: [{...backup.cfdis[0], userId: second.id}]},
+  ]) {
+    const response = await workspaceRestore(request('/api/workspace/restore', {action: 'restore', backup: invalid}, second.cookie));
+    assert.equal(response.status, 400);
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    assert.deepEqual((await (await read(second.cookie)).json() as WorkspaceSnapshot).cfdis, []);
+  }
+  const headers = new Headers({origin: baseURL, cookie: second.cookie, 'content-type': 'application/json', 'content-length': String(26 * 1024 * 1024)});
+  const oversized = await workspaceRestore(new Request(`${baseURL}/api/workspace/restore`, {method: 'POST', headers, body: '{}'}));
+  assert.equal(oversized.status, 413);
+  assert.deepEqual((await (await read(second.cookie)).json() as WorkspaceSnapshot).transactions, []);
+});
 
  test('authenticated HTTP workflow creates a profile, imports XML and CSV, reconciles and returns unverified SAT status', async () => {
   const user = await register();

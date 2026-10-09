@@ -69,13 +69,39 @@ $facturiaPgData = Join-Path (Get-Location) '.facturia-local/postgres/data'
 & 'C:\Program Files\PostgreSQL\18\bin\pg_ctl.exe' -D $facturiaPgData -m fast -w stop
 ```
 
-## Descargas
+## Descargas y restauración
 
 El respaldo JSON v1 incluye perfil, movimientos, documentos y XML originales
 propios disponibles. El reporte CSV incluye estado y UUID vinculado; es para
 revisión, tiene protección de textos frente a fórmulas y no es el formato del
 importador bancario. Las descargas admiten hasta 25 MiB en el piloto.
 
-La importación/restauración del JSON todavía no está habilitada. Antes de usar
-datos reales falta ensayar restauración, verificar el entorno externo y cerrar
-las integraciones pendientes del [plan de avance](PLAN_AVANCE.md).
+En un espacio vacío con perfil fiscal ya configurado, seleccionar un respaldo
+JSON v1 de Mi espacio con el mismo RFC y solicitar la vista previa. Confirmar
+«Restaurar en mi espacio» para guardar todo en una sola transacción. La operación
+se rechaza si otra pestaña importó datos después de la vista previa; no reemplaza
+registros ni cambia el perfil actual. Nunca importa credenciales ni sesiones.
+
+Se revalidan los XML originales y se recalculan los gastos manuales y las
+conciliaciones. Se conservan pausas, decisiones todavía válidas y alertas previas
+de cancelación/EFOS, sin consultar ni afirmar verificación SAT. Se rechazan
+respaldos demo, XML ausentes/invalidos, vínculos externos, RFC ajenos y duplicados.
+Los límites siguen siendo 5,000 movimientos, 2,000 documentos y 25 MiB por respaldo.
+
+Los IDs de la cuenta original se conservan. Al migrar a otra cuenta del mismo
+RFC se remapean documentos y vínculos, y los movimientos reconocidos del
+importador CSV se adaptan para conservar la deduplicación. Los IDs de movimientos
+externos que no se puedan reconocer se remapean sin garantizar deduplicación
+contra un CSV histórico posterior; importar sólo movimientos nuevos en ese caso.
+
+Verificar el flujo con datos sintéticos y credenciales guardadas sólo en caché:
+
+```powershell
+node --import tsx scripts/verify-restore-http.mjs --base-url http://127.0.0.1:3000 --state node_modules/.cache/local-restore-http.json
+```
+
+Tras reiniciar únicamente la aplicación, repetir con `--verify-only` para
+comprobar originales, propiedad, vínculos y pausas. Esta recuperación JSON de
+registros no sustituye un respaldo/restauración completo de PostgreSQL (cuentas,
+sesiones y auditoría). Antes de usar datos reales falta ensayar esa recuperación
+y cerrar las integraciones pendientes del [plan de avance](PLAN_AVANCE.md).
