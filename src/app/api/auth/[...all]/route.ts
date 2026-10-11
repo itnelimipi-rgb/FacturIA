@@ -1,5 +1,6 @@
 import { getAuth } from '../../../../server/auth';
-import { errorResponse, readJson } from '../../../../server/http';
+import { errorResponse, readJson, HttpError, assertSameOrigin } from '../../../../server/http';
+import {mailConfigured} from '../../../../server/mail';
 
 export const runtime = 'nodejs';
 async function handler(request: Request) {
@@ -12,7 +13,14 @@ async function handler(request: Request) {
       headers.delete('content-length');
       request = new Request(request.url, {method: 'POST', headers, body: JSON.stringify(body), signal: request.signal});
     }
-    return await getAuth().handler(request);
+    const auth = getAuth();
+    if (request.method === 'POST') {
+      assertSameOrigin(request);
+      if (['request-password-reset', 'send-verification-email'].includes(new URL(request.url).pathname.split('/').pop()!) && !mailConfigured()) {
+        throw new HttpError(503, 'El envío de correo todavía no está configurado.');
+      }
+    }
+    return await auth.handler(request);
   }
   catch (error) { return errorResponse(error); }
 }

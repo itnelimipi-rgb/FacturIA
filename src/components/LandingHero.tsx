@@ -5,7 +5,7 @@ import React from 'react';
 interface LandingHeroProps { onEnterDemo: () => void }
 
 const capabilities = [
-  {icon: '📄', title: 'XML originales', text: 'Importa CFDI 3.3 y 4.0 y revisa sus datos e importes. La consulta de vigencia SAT aún está pendiente.'},
+  {icon: '📄', title: 'XML originales', text: 'Importa CFDI 3.3 y 4.0, revisa sus importes y solicita el estado oficial SAT desde Mi espacio.'},
   {icon: '🏦', title: 'Movimientos CSV', text: 'Revisa una vista previa e importa movimientos bancarios sin duplicar el mismo registro.'},
   {icon: '🔗', title: 'Conciliación documental', text: 'Compara RFC, dirección, moneda, monto y fecha; decide cuando hay varias coincidencias.'},
   {icon: '💬', title: 'Resúmenes de tus datos', text: 'El asistente por reglas explica los registros disponibles. La integración de IA se añadirá después.'},

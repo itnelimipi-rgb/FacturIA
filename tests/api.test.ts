@@ -137,7 +137,8 @@ test('assistant refuses to fabricate fiscal savings or a live SAT check', async 
   const body = await response.json();
   assert.equal(response.status, 200);
   assert.equal(body.generatedByAI, false);
-  assert.match(body.reply, /no están activadas/);
+  assert.match(body.reply, /este mensaje no realiza una consulta/);
+  assert.match(body.reply, /necesitan revisión contable/);
   assert.match(body.reply, /porcentajes simulados/);
 });
 

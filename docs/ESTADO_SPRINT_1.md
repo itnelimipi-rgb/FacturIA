@@ -1,4 +1,4 @@
-# Punto de avance — 8 de octubre de 2026
+# Estado del sprint — 11 de octubre de 2026
 
 Trabajo publicado en `sprint-1` del repositorio público, con autoría de la cuenta
 GitHub `d1512pb` del usuario y sin coautores de IA. `main` permanece intacto;
@@ -6,7 +6,59 @@ no se creó PR ni se hizo merge. PostgreSQL local está habilitado y migrado.
 Railway staging está activo con datos sintéticos y límite duro de USD 10
 para recursos de todo el workspace.
 
-## Verificado localmente
+## Incremento del 11 de octubre implementado en código
+
+- PDF.js lee PDF y Tesseract.js realiza OCR en español en el navegador. Workers,
+  WASM y datos del idioma se sirven desde la app; no se usa una API OCR paga.
+  Archivos de hasta 5 MiB, imágenes de 5 millones de píxeles, 10 páginas con texto
+  o 3 escaneadas, lectura de 60 segundos y cancelación. Los campos detectados son
+  editables y se confirman antes de guardar; impuestos desconocidos permanecen
+  vacíos, sin IVA calculado ni UUID inventado.
+- Originales privados PDF/PNG/JPEG/WebP en PostgreSQL: 5 MiB por archivo,
+  20 archivos y 25 MiB por cuenta. Metadatos y hash SHA-256; descarga por sesión
+  y propietario como adjunto, con `no-store`, `nosniff` y CSP `sandbox`.
+  Una clave de idempotencia conserva el mismo registro ante un reintento;
+  reutilizarla con otro contenido o importes se rechaza sin cambiar datos.
+- Consulta SOAP al servicio oficial SAT de un XML propio, con resultado fechado,
+  vigencia y EFOS únicamente según la respuesta. Fallos de transporte o un CFDI
+  no encontrado conservan `no_verificado`. No valida XSD, sellos o timbre ni
+  emite facturas. No sincroniza una lista EFOS completa.
+- IA local opcional y experimental mediante WebLLM/Qwen2.5 0.5B y WebGPU:
+  descarga aproximada de 320 MB del modelo desde Hugging Face y MLC, sin clave
+  de API ni servidor GPU. Reglas e indicadores deterministas permanecen como
+  referencia; las respuestas del modelo no acreditan importes ni decisiones
+  fiscales. La inferencia real y compatibilidad de dispositivos siguen por probar.
+- Correo de verificación y recuperación de contraseña implementados, sin activar
+  entrega hasta configurar y probar un remitente autorizado. Resend HTTPS es la
+  opción preferida en Railway Hobby, donde SMTP saliente no está disponible.
+  SMTP con TLS queda para entornos que lo permitan. Un proveedor sin configurar
+  devuelve indisponibilidad y no anuncia un envío ficticio.
+- Cuotas compartidas en PostgreSQL para autenticación, originales, consultas
+  SAT y envíos de correo; el contador no depende de memoria de una sola réplica.
+
+**Verificación local del incremento:** 262 pruebas, lint, TypeScript y build aprobados;
+auditoría npm completa sin vulnerabilidades conocidas. PDF.js y Tesseract/WASM
+leyeron realmente los fixtures sintéticos. El flujo con PostgreSQL local aprobó
+14 comprobaciones HTTP, incluida respuesta SAT oficial N602 para un XML sintético,
+aislamiento de originales y reintentos idempotentes.
+
+La recuperación completa de PostgreSQL local coincidió en 11 tablas, esquema y
+contenido, incluido el PDF original. La comprobación de carga en el clon usó 200
+documentos, 200 movimientos y 20 lecturas a concurrencia 2; p50 204 ms y p95 358 ms.
+Consultar [el ensayo de recuperación](RECUPERACION_POSTGRES.md) para límites y
+custodia privada. CI, despliegue y prueba visual del incremento
+siguen en verificación hasta registrar sus resultados.
+
+El usuario pidió posponer dominio y correo real el 11 de octubre. El transporte
+de correo se conserva desactivado; sus pruebas usan un proveedor simulado y
+ningún correo se envió desde esta etapa.
+
+El JSON de respaldo mantiene los XML originales y campos documentales,
+**sin bytes de PDF o imágenes**. Descargar esos originales por separado o usar
+un respaldo completo de PostgreSQL que incluya `app_document_files`.
+Una restauración JSON no equivale a recuperar la base, las cuentas o las sesiones.
+
+## Checkpoint anterior — verificado localmente el 8 de octubre
 
 - `npm run check`: lint, TypeScript, **193 pruebas** y build de producción pasan.
 - `npm audit`: cero vulnerabilidades conocidas reportadas, incluidas dependencias
@@ -45,7 +97,7 @@ para recursos de todo el workspace.
   registros restaurados. El script `scripts/verify-restore-http.mjs` repite este
   ensayo con cuentas sintéticas y estado privado ignorado por Git.
 
-## Verificado en Railway
+## Checkpoint anterior — verificado en Railway
 
 - [Demo](https://web-staging-b090.up.railway.app/demo) y
   [espacio personal](https://web-staging-b090.up.railway.app/workspace) disponibles
@@ -84,17 +136,23 @@ revisar checks, actualizar el pin sólo en staging y comprobar ese deployment.
 ## Pendiente antes de main
 
 - Confirmar CI en GitHub para el commit final que se proponga promover a main.
-- Ensayar backup/restore completo de PostgreSQL y medir carga antes de admitir
-  datos reales. La concurrencia de dos restauraciones ya quedó comprobada.
+- Ensayar recuperación en el destino definitivo, definir retención y copia
+  cifrada fuera de la PC y medir carga HTTP antes de admitir datos reales.
+  El ensayo local completo y la concurrencia de dos restauraciones JSON pasaron.
 - Prueba visual completa de demo y espacio autenticado. El control del navegador
   local fue bloqueado por su política de acceso y el controlador de staging
   falló al inicializar sus recursos; no se da por comprobada.
-- Configurar SMTP/invitaciones para ampliar el piloto; almacenar el rate limit
-  compartido antes de escalar a varias instancias.
+- Configurar y verificar entrega de correo, dominio/remitente autorizado e
+  invitaciones antes de ampliar el piloto. Las cuotas compartidas ya están
+  implementadas; su evidencia en la versión nueva se registrará tras las pruebas.
+- Ejecutar inferencia real de WebLLM y revisar fallos/cancelación en los navegadores
+  y dispositivos objetivo. La presencia del código no acredita rendimiento GPU.
 - Revisar limitaciones y obtener aprobación del usuario para promover a main.
 
-OCR/PDF, proveedor de IA, SAT/EFOS oficial, bancos, WhatsApp y reglas fiscales
-siguen en el [plan de avance](PLAN_AVANCE.md). No hay documentos fiscales reales,
+OCR/PDF, consulta SAT e IA local tienen implementación en este incremento;
+su alcance y validación final se distinguen de los resultados anteriores.
+Bancos, WhatsApp, complementos y reglas fiscales permanecen en el
+[plan de avance](PLAN_AVANCE.md). No hay documentos fiscales reales,
 secretos ni credenciales SAT incluidos en este punto de avance.
 
 Para continuar, leer el [entorno de staging](STAGING.md) y las

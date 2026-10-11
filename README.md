@@ -17,6 +17,10 @@ y [espacio personal](https://web-staging-b090.up.railway.app/workspace).
 
 ## Funciones implementadas
 
+El incremento del **11 de octubre de 2026** está implementado en código; su
+validación completa y deployment se registrarán cuando terminen. Las pruebas
+del checkpoint anterior se distinguen al final de este documento.
+
 - Importación XML CFDI 3.3/4.0: estructura, namespace, UUID, RFC, fechas, importes,
   descuentos e impuestos. Revalidación en servidor para el espacio persistente.
 - CSV bancario con vista previa, errores por fila e importación idempotente.
@@ -24,21 +28,55 @@ y [espacio personal](https://web-staging-b090.up.railway.app/workspace).
   Un documento se vincula a un movimiento; resolución manual de ambigüedades,
   desvinculación y reanudación de búsqueda.
 - Gastos manuales provisionales, sin inventar UUID ni timbre.
+- Lectura local de PDF con PDF.js y OCR en español con Tesseract.js, ambos open
+  source. Los campos son sugerencias editables: el usuario revisa RFC, proveedor,
+  fecha, moneda, subtotal, IVA y retenciones antes de confirmar. No se calcula
+  un IVA supuesto ni se convierte una imagen en un CFDI timbrado.
+- Originales PDF/PNG/JPEG/WebP privados en PostgreSQL, sólo después de confirmar:
+  hasta **5 MiB por archivo, 20 originales y 25 MiB por cuenta**. Descarga
+  autenticada como adjunto, hash SHA-256 e idempotencia para reintentos.
 - Descarga de respaldo JSON propio con XML originales y reporte CSV de movimientos.
 - Restauración JSON v1 con vista previa, mismo RFC y espacio vacío; XML revalidado,
   perfil conservado y guardado completo en una transacción.
 - Indicadores derivados de registros, separados por moneda, y asistente por
   reglas que resume los datos disponibles.
+- Asistente de IA local **opcional y experimental** con WebLLM y Qwen2.5 0.5B.
+  Requiere WebGPU y descarga aproximadamente 320 MB de modelo desde Hugging Face
+  y MLC. Las preguntas y el resumen se procesan en el dispositivo; no requiere
+  clave de API ni un servidor GPU. La activación es explícita y el asistente por
+  reglas sigue disponible. La inferencia real en navegador aún requiere prueba.
+- Consulta SOAP al servicio oficial SAT para un XML propio: vigencia, resultado,
+  fecha y EFOS cuando la respuesta lo proporciona. Un documento no encontrado o
+  una falla del servicio conserva `no_verificado`; una consulta no valida sellos.
+- Verificación de correo y recuperación de contraseña implementadas, desactivadas
+  mientras falta configurar entrega. Adaptadores Resend HTTPS y SMTP con TLS;
+  cuota diaria global y límites por cuenta almacenados en PostgreSQL.
 - Autenticación, aislamiento por usuario, restricciones SQL, transacciones y
   auditoría de cambios. Pruebas del SQL y autenticación con PostgreSQL embebido.
 
+PDF/OCR admite archivos de 5 MiB, imágenes de hasta 5 millones de píxeles,
+PDF de hasta 10 páginas con texto o 3 escaneadas y lectura de hasta 60 segundos,
+con cancelación. La demo conserva únicamente campos confirmados; los originales
+privados pertenecen al espacio con cuenta.
+
+**El respaldo JSON no incluye los bytes de PDF o imágenes.** Descarga esos
+originales por separado; la recuperación completa de PostgreSQL debe incluir
+`app_document_files`. Restaurar JSON no recupera cuentas, sesiones ni originales
+de esos formatos.
+
 ## Pendiente
 
-Consulta oficial de vigencia SAT/EFOS, validación de sellos/XSD, OCR/PDF, proveedor
-de IA, bancos y WhatsApp. El XML importado se etiqueta **SAT no verificado**.
+Validación de sellos/XSD/timbre, emisión y timbrado mediante PAC, reglas fiscales
+revisadas, complementos, impuestos locales, bancos y WhatsApp. No hay descarga
+masiva de CFDI ni lista EFOS completa sincronizada. La consulta implementada
+informa únicamente lo que devuelve SAT para el comprobante seleccionado.
 Conciliar no demuestra autenticidad ni deducibilidad. No se calculan ahorros
-fiscales ni se emiten CFDI; no se capturan credenciales CIEC/CSD.
-Complementos, impuestos locales y conversiones de moneda necesitan ampliación.
+fiscales ni se capturan credenciales CIEC/CSD.
+
+Falta activar y probar correo con una cuenta y remitente autorizados, revisar
+visualmente todos los flujos, probar WebGPU/inferencia real en los dispositivos
+objetivo, medir carga y registrar un ensayo completo de recuperación PostgreSQL.
+Los resultados de validación del incremento se documentarán al concluirlos.
 
 ## Desarrollo local
 
@@ -61,6 +99,17 @@ npm run db:migrate
 Las migraciones actuales viven en `db/migrations`. `supabase/migrations` conserva
 el diseño inicial como referencia y no se aplica a este backend.
 
+`predev` y `prebuild` preparan workers, WASM y datos de idioma desde paquetes npm
+en `public/document-tools`, ignorado por Git. Los documentos no se envían a una
+API OCR; se procesan en el navegador. El guardado confirmado envía el original
+únicamente al backend de esta aplicación.
+
+Para correo, priorizar `MAIL_PROVIDER=resend`, `RESEND_API_KEY` y `EMAIL_FROM`
+con remitente autorizado y un plan gratuito dentro de sus cuotas. No activar un
+plan pago sin autorización. Railway Free/Trial/Hobby requiere correo por HTTPS:
+[SMTP saliente sólo está disponible en Pro o superior](https://docs.railway.com/networking/outbound-networking).
+`REQUIRE_EMAIL_VERIFICATION` permanece desactivado hasta verificar el envío real.
+
 ## Verificación
 
 ```sh
@@ -75,14 +124,18 @@ misma suite. Los fixtures son sintéticos y no tienen validez fiscal.
 
 ## Estado y próximo avance
 
-Pasaron **193 pruebas locales**, lint, TypeScript y build. El staging ejecuta el
-commit `2916f18f2ae014e3ebac3d1b368db90d1b8869f4`: esquema migrado y healthcheck
-funcional. Hay **36 comprobaciones HTTP externas** documentadas, incluidas
-**17 de restauración JSON** con concurrencia, reimportación CSV y persistencia
-después del reinicio del servicio web. Su
-[CI en GitHub](https://github.com/itnelimipi-rgb/FacturIA/actions/runs/37875161206)
-también pasó. Falta la revisión visual completa, pruebas de carga y la
-recuperación completa de PostgreSQL desde un respaldo.
+El incremento del 11 de octubre pasó **262 pruebas**, lint, TypeScript y build, con
+auditoría npm completa sin vulnerabilidades conocidas. Los motores PDF/OCR
+leyeron fixtures sintéticos y hubo **14 comprobaciones HTTP locales** con
+PostgreSQL, descarga privada y respuesta SAT N602. La recuperación completa
+local coincidió en 11 tablas e incluyó el PDF original; también pasó una
+comprobación breve de carga en el clon. CI, publicación y revisión
+visual siguen en verificación y se registrarán en [staging](docs/STAGING.md).
+El checkpoint anterior tuvo **36 comprobaciones HTTPS** de sus flujos y
+restauración JSON; se conserva su evidencia en el estado del sprint.
+
+Dominio/remitente y correo real quedan pospuestos por indicación del usuario.
+El proveedor de correo permanece desactivado.
 
 Leer [estado del sprint](docs/ESTADO_SPRINT_1.md), [plan de avance](docs/PLAN_AVANCE.md),
 [staging](docs/STAGING.md) y [coordinación con Claude Code](docs/COORDINACION.md).

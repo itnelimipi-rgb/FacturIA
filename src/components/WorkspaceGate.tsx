@@ -3,6 +3,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import FacturiaDashboard from './FacturiaDashboard';
+import {AccountEmailControls} from './AccountEmailControls';
 import type { Profile, BankTransaction, CfdiRecord } from '../lib/types';
 
 type Snapshot = {profile: Profile | null; transactions: BankTransaction[]; cfdis: CfdiRecord[]};
@@ -80,6 +81,7 @@ export default function WorkspaceGate() {
         {state === 'login' && <button type="button" onClick={() => {setRegister(!register); setError('');}} className="block text-sm underline">{register ? 'Ya tengo cuenta' : 'Crear cuenta de prueba'}</button>}
       </form>}
       {state === 'profile' && <button type="button" disabled={busy} onClick={signOut} className="block text-sm underline disabled:opacity-50">Cerrar sesión</button>}
+      {state === 'login' && <AccountEmailControls onLogin={() => setRegister(false)} />}
       <Link href="/demo" className="inline-block text-sm underline text-slate-300">Abrir demostración</Link>
     </section>
   </main>;

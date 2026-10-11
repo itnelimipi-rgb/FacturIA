@@ -35,6 +35,14 @@ export const transactionSchema = z.object({
   candidateCfdiIds: z.array(z.string().max(200)).max(WORKSPACE_DOCUMENT_LIMIT).optional(),
   alertReason: z.string().max(1000).optional(), reconciliationLocked: z.boolean().optional(),
 });
+export const satVerificationSchema = z.object({
+  source: z.literal('sat'), checkedAt: z.iso.datetime(),
+  outcome: z.enum(['found', 'not_found', 'invalid_query', 'unavailable']),
+  status: z.enum(['vigente', 'cancelado', 'no_verificado']),
+  code: z.enum(['S', 'N601', 'N602']).optional(),
+  efos: z.enum(['listed', 'not_listed', 'unknown']),
+  cancelability: z.string().max(100).optional(), cancellationStatus: z.string().max(100).optional(),
+});
 export const cfdiSchema = z.object({
   id: z.string().min(1).max(200), userId: z.string().min(1).max(200),
   uuidSat: z.string().max(200), rfcEmisor: rfcSchema, rfcReceptor: rfcSchema,
@@ -47,6 +55,12 @@ export const cfdiSchema = z.object({
   usoCfdi: z.string().max(5).optional(), formaPago: z.string().max(2).optional(),
   conceptos: z.array(conceptSchema).max(1000).optional(),
   rawXml: z.string().max(2_000_000).optional(),
+  satVerification: satVerificationSchema.optional(),
+  attachment: z.object({
+    contentType: z.enum(['application/pdf', 'image/png', 'image/jpeg', 'image/webp']),
+    bytes: z.number().int().min(1).max(5 * 1024 * 1024),
+    sha256: z.string().regex(/^[\da-f]{64}$/), source: z.enum(['pdf', 'image']),
+  }).optional(),
 });
 export const snapshotSchema = z.object({
   profile: profileSchema, transactions: z.array(transactionSchema).max(WORKSPACE_TRANSACTION_LIMIT), cfdis: z.array(cfdiSchema).max(WORKSPACE_DOCUMENT_LIMIT),

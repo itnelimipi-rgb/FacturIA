@@ -38,7 +38,7 @@ export const FiscalDashboardPanel: React.FC<FiscalDashboardPanelProps> = ({ metr
   const tips = [
     totalTransactions ? `${metrics.conciliadoCount} de ${totalTransactions} movimientos tienen un comprobante vinculado. Revisa las coincidencias antes de cerrar el periodo.` : 'Importa tu primer CSV bancario y un XML para comenzar la conciliación.',
     metrics.ambiguoCount ? `${metrics.ambiguoCount} movimiento(s) requieren que selecciones el comprobante correcto.` : 'No hay coincidencias ambiguas pendientes.',
-    unverifiedCount ? `${unverifiedCount} registro(s) tienen vigencia SAT sin verificar. Importar un XML no confirma su vigencia ni su deducibilidad.` : 'La verificación oficial de vigencia SAT y la consulta EFOS están pendientes de configurar.',
+    unverifiedCount ? `${unverifiedCount} registro(s) tienen vigencia SAT sin verificar. Importar un XML no confirma su vigencia ni su deducibilidad.` : 'Revisa la fecha y resultado de la consulta SAT en el detalle de cada XML de Mi espacio. La demo usa estados de ejemplo.',
     manualCount ? `${manualCount} gasto(s) provisionales no cuentan con UUID fiscal. Solicita e importa su XML timbrado.` : 'Los cálculos de impuestos y deducciones requieren validar el régimen y los comprobantes antes de habilitarse.'
   ];
 

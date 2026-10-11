@@ -1,11 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { MatchingEngineService } from '../lib/MatchingEngineService';
-import type { Profile, BankTransaction, CfdiRecord } from '../lib/types';
+import type { Profile, BankTransaction, CfdiRecord, SatVerification } from '../lib/types';
 import { HttpError } from './http';
-import { cfdiSchema, WORKSPACE_DOCUMENT_LIMIT, WORKSPACE_TRANSACTION_LIMIT } from '../lib/validation';
+import { cfdiSchema, satVerificationSchema, WORKSPACE_DOCUMENT_LIMIT, WORKSPACE_TRANSACTION_LIMIT } from '../lib/validation';
 import { MAX_WORKSPACE_EXPORT_BYTES } from '../lib/workspaceExport';
 import { prepareWorkspaceRestore, type PreparedWorkspaceRestore } from './workspaceRestore';
+import { XmlCfdiParser } from '../lib/xmlParser';
+import { SAT_DOCUMENT_COOLDOWN_MS } from './satStatus';
 export { namespacedTransactionId } from './recordIds';
 
 export interface WorkspaceSnapshot {profile: Profile | null; transactions: BankTransaction[]; cfdis: CfdiRecord[]}
@@ -126,6 +128,50 @@ export class WorkspaceRepository {
       delete safeDocument.rawXml;
       await client.query('INSERT INTO app_documents(id,user_id,uuid_sat,payload,raw_xml) VALUES($1,$2,$3,$4,$5)', [document.id, userId, document.uuidSat || null, JSON.stringify(safeDocument), rawXml || null]);
     });
+  }
+
+  /** Query identity comes from the owner's stored original XML, never request fields. */
+  async getDocumentForSat(userId: string, documentId: string): Promise<CfdiRecord> {
+    const client = await this.database.connect();
+    try {
+      const result = await client.query<{payload: CfdiRecord; raw_xml: string | null; rfc: string}>(
+        'SELECT document.payload,document.raw_xml,profile.rfc FROM app_documents AS document JOIN app_profiles AS profile ON profile.user_id=document.user_id WHERE document.id=$1 AND document.user_id=$2', [documentId, userId]
+      );
+      const row = result.rows[0];
+      if (!row) throw new HttpError(404, 'Comprobante no encontrado');
+      const stored = cfdiSchema.parse(row.payload);
+      if (stored.sourceType !== 'xml' || !row.raw_xml) throw new HttpError(409, 'La consulta SAT requiere el XML original de un CFDI');
+      const parsed = XmlCfdiParser.parse(row.raw_xml, userId);
+      if (!parsed.success || !parsed.cfdi || !this.sameSatIdentity(stored, parsed.cfdi)
+        || (parsed.cfdi.rfcEmisor !== row.rfc && parsed.cfdi.rfcReceptor !== row.rfc)) {
+        throw new HttpError(409, 'El XML original no coincide con la identidad fiscal guardada');
+      }
+      const checkedAt = stored.satVerification ? Date.parse(stored.satVerification.checkedAt) : 0;
+      if (Date.now() - checkedAt < SAT_DOCUMENT_COOLDOWN_MS) {
+        throw new HttpError(429, 'Espera un minuto antes de consultar otra vez este comprobante');
+      }
+      return stored;
+    } finally { client.release(); }
+  }
+
+  /** Save a dated consultation and reconcile atomically; all failures retain existing risk flags. */
+  async saveSatConsultation(userId: string, expectedDocument: CfdiRecord, consultation: SatVerification) {
+    if (expectedDocument.userId !== userId) throw new HttpError(403, 'El comprobante no pertenece a tu cuenta');
+    const verified = satVerificationSchema.parse(consultation);
+    return this.mutate(userId, 'sat_status_consulted', async client => {
+      const result = await client.query<{payload: CfdiRecord}>('SELECT payload FROM app_documents WHERE id=$1 AND user_id=$2', [expectedDocument.id, userId]);
+      if (!result.rows[0]) throw new HttpError(404, 'Comprobante no encontrado');
+      const current = cfdiSchema.parse(result.rows[0].payload);
+      if (!this.sameSatIdentity(current, expectedDocument)) throw new HttpError(409, 'La identidad del comprobante cambió durante la consulta');
+      const statusSat = verified.outcome === 'found' ? verified.status : current.statusSat === 'cancelado' ? 'cancelado' : 'no_verificado';
+      const updated = {...current, statusSat, isEfos: current.isEfos || (verified.outcome === 'found' && verified.efos === 'listed'), satVerification: verified};
+      await client.query('UPDATE app_documents SET payload=$1 WHERE id=$2 AND user_id=$3', [JSON.stringify(updated), current.id, userId]);
+    });
+  }
+
+  private sameSatIdentity(left: CfdiRecord, right: CfdiRecord): boolean {
+    return left.userId === right.userId && left.uuidSat.toUpperCase() === right.uuidSat.toUpperCase()
+      && left.rfcEmisor === right.rfcEmisor && left.rfcReceptor === right.rfcReceptor && left.total === right.total;
   }
 
   async addTransactions(userId: string, transactions: BankTransaction[]) {

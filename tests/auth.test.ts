@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
-import path from 'node:path';
+import {applyTestMigrations} from './helpers/migrations';
 import { before, beforeEach, after, test } from 'node:test';
 import { PGlite } from '@electric-sql/pglite';
 import type { Pool } from 'pg';
@@ -23,7 +22,7 @@ let clientNumber = 0;
 
 before(async () => {
   await db.waitReady;
-  await db.exec(await readFile(path.resolve('db/migrations/001_workspace.sql'), 'utf8'));
+  await applyTestMigrations(db);
 });
 beforeEach(async () => {
   clientNumber++;

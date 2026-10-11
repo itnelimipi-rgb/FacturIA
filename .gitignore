@@ -30,6 +30,8 @@ yarn-error.log*
 
 # Private local database and setup files
 .facturia-local/
+# Generated open-source PDF/OCR worker, language and font assets.
+/public/document-tools/
 
 # Vercel
 .vercel

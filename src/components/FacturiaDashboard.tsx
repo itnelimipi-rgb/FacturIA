@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { BankCsvImport } from '../components/BankCsvImport';
 import { WorkspaceExportControls } from './WorkspaceExportControls';
+import {manualDocumentSchema} from '../lib/validation';
 import { WorkspaceRestoreControls } from './WorkspaceRestoreControls';
 import { CashFlowShield } from '../components/CashFlowShield';
 import { UnifiedDropzone } from '../components/UnifiedDropzone';
@@ -63,10 +64,24 @@ export default function FacturiaDashboard({ mode = 'demo', initialSnapshot }: { 
   const applySnapshot = (data: Snapshot) => {
     setProfile(data.profile); setTransactions(data.transactions); setCfdis(data.cfdis);
   };
+  const provisionalRequests = useRef(new WeakMap<File, {fingerprint: string; key: string}>());
   const workspaceAction = async (body: unknown) => {
     const res = await fetch('/api/workspace', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'No se pudo guardar el cambio');
+    applySnapshot(data);
+  };
+  const handleProvisionalAdded = async (document: CfdiRecord, _source: 'pdf' | 'image', file: File) => {
+    const fields = manualDocumentSchema.parse(document);
+    const fingerprint = JSON.stringify(fields);
+    const previous = provisionalRequests.current.get(file);
+    const key = previous?.fingerprint === fingerprint ? previous.key : crypto.randomUUID();
+    provisionalRequests.current.set(file, {fingerprint, key});
+    const body = new FormData();
+    body.set('document', fingerprint); body.set('file', file);
+    const response = await fetch('/api/workspace/documents/provisional', {method: 'POST', headers: {'Idempotency-Key': key}, body});
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'No se pudo guardar el gasto y su original.');
     applySnapshot(data);
   };
   const handleCfdiAdded = async (newCfdi: CfdiRecord, source: 'xml' | 'pdf' | 'image' | 'manual') => {
@@ -231,7 +246,7 @@ export default function FacturiaDashboard({ mode = 'demo', initialSnapshot }: { 
           <div className="flex items-center gap-2">
             <Zap className="w-4 h-4 text-[oklch(0.78_0.15_195)] shrink-0" />
             <span>
-              <strong>{isDemo ? "Modo demostración:" : "Conciliación documental:"}</strong> XML y movimientos CSV se revisan con reglas deterministas. La vigencia SAT, lista EFOS oficial, OCR e IA están pendientes de configurar.
+              <strong>{isDemo ? "Modo demostración:" : "Conciliación documental:"}</strong> XML y CSV con reglas; PDF/OCR con revisión e IA local opcional. {isDemo ? 'Los estados SAT/EFOS de la demo son ejemplos.' : 'Consulta el estado oficial SAT desde el detalle de cada XML.'}
             </span>
           </div>
           <div className="flex items-center gap-2 text-[11px] font-mono shrink-0">
@@ -239,7 +254,7 @@ export default function FacturiaDashboard({ mode = 'demo', initialSnapshot }: { 
               XML: 0 Tokens
             </span>
             <span className="px-2 py-0.5 rounded bg-[oklch(0.65_0.20_295/0.2)] text-purple-300">
-              SAT: no verificado
+              {isDemo ? 'SAT: ejemplo' : 'SAT: consulta por XML'}
             </span>
           </div>
         </section>
@@ -288,7 +303,7 @@ export default function FacturiaDashboard({ mode = 'demo', initialSnapshot }: { 
             </div>
 
             {/* Dropzone Unificado */}
-            <UnifiedDropzone userId={profile.id} demoMode={isDemo} onCfdiAdded={handleCfdiAdded} />
+            <UnifiedDropzone userId={profile.id} rfcReceptor={profile.rfc} demoMode={isDemo} onCfdiAdded={handleCfdiAdded} onProvisionalAdded={isDemo ? undefined : handleProvisionalAdded} />
             <BankCsvImport userId={profile.id} accountId="cuenta-csv-01" onTransactionsImported={handleTransactionsImported} />
 
             {/* Inbox de Tesorería Unificado */}
@@ -348,6 +363,12 @@ export default function FacturiaDashboard({ mode = 'demo', initialSnapshot }: { 
 
       {/* Modal para Inspección de CFDI */}
       <CfdiDetailModal
+        demoMode={isDemo}
+        onSnapshotUpdated={data => {
+          if (!data.profile) return;
+          applySnapshot({...data, profile: data.profile});
+          setSelectedCfdi(previous => previous ? data.cfdis.find(document => document.id === previous.id) ?? null : null);
+        }}
         isOpen={!!selectedCfdi}
         onClose={() => setSelectedCfdi(null)}
         cfdi={selectedCfdi}

@@ -1,11 +1,16 @@
 # Plan de avance de FacturIA
 
-Fecha: 8 de octubre de 2026. Rama de trabajo: `sprint-1`.
+Actualizado: 11 de octubre de 2026. Rama de trabajo y pruebas: `sprint-1`.
+La rama continuará separada de `main` hasta autorización explícita del usuario.
+Priorizar herramientas open source y APIs gratuitas; conservar el límite duro
+de USD 10 de recursos para el conjunto del workspace Railway.
 
 ## Resultado que buscamos
 
-Un usuario inicia sesión, configura su RFC, importa un XML original y movimientos
-bancarios CSV, revisa los documentos y resuelve conciliaciones. Sus datos sobreviven
+Un usuario inicia sesión, configura su RFC, importa XML originales, PDF/imágenes
+con revisión humana y movimientos bancarios CSV. Revisa documentos, resuelve
+conciliaciones y puede consultar SAT para sus XML o activar un asistente local.
+Sus datos sobreviven
 al cierre del navegador y sólo son accesibles desde su cuenta. La demostración
 permanece disponible en `/demo`, con almacenamiento local y datos sintéticos.
 
@@ -22,7 +27,8 @@ deducibilidad, pago de impuestos ni consulta oficial EFOS.
 - Conciliar por dueño, dirección, moneda, centavos y día calendario. Evitar
   comprobantes cancelados, EFOS ajenos y uso del mismo UUID en dos movimientos.
 - CSV con vista previa, errores por fila y deduplicación. Gastos manuales
-  provisionales sin inventar timbre. PDF e imágenes muestran capacidad pendiente.
+  provisionales sin inventar timbre. PDF/OCR se integra en la etapa 3 con revisión
+  de campos antes de registrar cualquier gasto.
 - Mantener escenario demo de 3 conciliados, 1 ambiguo y 1 discrepancia.
 
 Criterio de salida: suite real y compilación pasan; no se inventan resultados ni
@@ -51,23 +57,41 @@ pruebas de cookies y proxy en Railway, además de las pruebas locales PostgreSQL
 
 ## Etapa 3 — Documentos no estructurados e IA
 
-- Elegir proveedor, modelo y límite de gasto con el usuario; claves sólo en
-  variables del servidor. Añadir extracción PDF y OCR de imágenes.
-- Guardar originales en almacenamiento privado y procesar con límite de tamaño,
-  tiempo, páginas, permisos, reintentos y estado visible.
-- Salida estructurada validada y revisión humana. Un ticket no se transforma
-  en un CFDI timbrado. Los importes siempre se recalculan determinísticamente.
-- Asistente con contexto de la cuenta autenticada, referencias a documentos y
-  respuesta explícita cuando falta evidencia. Resúmenes locales por reglas
-  siguen disponibles mientras no haya proveedor de IA.
+- Implementado en código el 11 de octubre: PDF.js para texto PDF y Tesseract.js
+  para OCR español, con workers/WASM/idioma servidos por la app. Procesamiento
+  en el navegador, sin API OCR de pago. Límite de 5 MiB, 5 millones de píxeles,
+  PDF de 10 páginas con texto o 3 escaneadas y lectura de 60 segundos cancelable.
+- Campos sugeridos editables y confirmación humana: RFC, proveedor, fecha, MXN,
+  subtotal, IVA, retenciones y total recalculado. Los datos no encontrados
+  permanecen vacíos; un ticket sigue siendo un gasto provisional sin UUID.
+- Originales privados en PostgreSQL después de confirmar: hasta 20 archivos y
+  25 MiB por cuenta, dentro del límite de 5 MiB por original. Descarga autenticada,
+  hash de contenido e idempotencia para reintentos sin documentos duplicados.
+- IA local opcional y experimental con WebLLM y Qwen2.5 0.5B: WebGPU, descarga
+  aproximada de 320 MB desde Hugging Face/MLC y activación explícita. Sin clave
+  de API ni servidor GPU; contexto acotado de registros propios y referencias.
+  Indicadores deterministas y asistente por reglas permanecen disponibles.
+- Verificar visualmente carga, lectura, cancelación, errores y revisión antes
+  de guardar; probar inferencia real y dispositivos con/sin WebGPU. Si hace falta
+  una API o modelo distinto, definir proveedor y cuotas gratuitas con el usuario
+  antes de activar cargos o enviar documentación a un tercero.
 
-Criterio de salida: archivos reales de prueba, errores controlados, costes
-medidos y ninguna creación de UUID, sello o cifras inventadas.
+Criterio de salida: archivos sintéticos representativos y datos reales de prueba
+autorizados, errores controlados, costes medidos y ninguna creación de UUID,
+sello o cifras fiscales inventadas. La presencia del código no sustituye pruebas
+en navegador ni acredita calidad de la respuesta de IA.
 
 ## Etapa 4 — Datos fiscales y bancarios oficiales
 
-- Consulta de estado CFDI y lista EFOS oficial, con procedencia, fecha de
-  actualización y estados de fallo. No considerar el mock una lista SAT real.
+- Implementado en código el 11 de octubre: consulta SOAP al servicio oficial SAT
+  de un XML propio, con resultado fechado, vigencia y EFOS si la respuesta lo
+  proporciona. XML no encontrado y fallo del servicio conservan `no_verificado`.
+  Cuotas compartidas: seis solicitudes por cuenta/minuto y una por documento/minuto.
+- Verificar transporte oficial y UI; ampliar a sincronización de una lista EFOS
+  completa sólo con fuentes oficiales, procedencia y fecha de actualización.
+  La lista de ejemplo de `/demo` continúa siendo explícitamente demostrativa.
+- Validar sellos/XSD/timbre y definir integración de emisión con PAC antes de
+  ofrecer timbrado. La consulta de estado no sustituye estas verificaciones.
 - Reglas fiscales versionadas por régimen, periodo, moneda y tipo de
   comprobante, contrastadas con fuentes oficiales y revisión contable.
 - Ampliar tipos y complementos CFDI: P/pagos parciales, notas de crédito,
@@ -82,10 +106,19 @@ reglas revisadas. No almacenar CIEC/CSD hasta definir su flujo y gestión de cla
 
 - Cuenta y número Meta/WhatsApp Business, webhooks verificados y usuarios
   vinculados a cuentas autenticadas. Nunca inferir identidad sólo por texto.
-- Verificación de correo o invitaciones, recuperación de cuenta, permisos,
-  límites distribuidos, privacidad, retención, eliminación y exportación.
+- Verificación de correo y recuperación de contraseña implementadas, pendientes
+  de configurar y probar entrega: priorizar Resend HTTPS con remitente/dominio
+  autorizado y cuotas gratuitas. SMTP con TLS sólo donde esté permitido; Railway
+  Hobby no permite SMTP saliente. Mantener el correo desactivado hasta validarlo.
+- Cuotas distribuidas mediante PostgreSQL ya implementadas. Revisar permisos,
+  invitaciones, privacidad, retención, eliminación y exportación antes de ampliar
+  el piloto. Los envíos de correo tienen una cuota diaria global configurable.
 - Copias de seguridad y restauración ensayadas, observabilidad, gestión de
   incidentes, coste mensual revisado y piloto con usuarios autorizados.
+- El respaldo JSON incluye XML y campos, sin bytes de PDF/imágenes ni cuentas o
+  sesiones. Descargar originales por separado o recuperar PostgreSQL completo,
+  incluyendo `app_document_files`. Registrar el ensayo y sus verificaciones
+  antes de atribuir capacidad de recuperación de la base.
 - Proteger `main` y exigir CI y revisión. Abrir PR desde `sprint-1`, comparar demo
   y espacio funcional y obtener aprobación del usuario antes de promover.
 
@@ -97,6 +130,11 @@ reglas revisadas. No almacenar CIEC/CSD hasta definir su flujo y gestión de cla
 4. Cambios, limitaciones y rollback documentados en el PR.
 5. Aprobación del usuario para la promoción. Un despliegue de pruebas no autoriza
    cambios en producción ni en el dominio personal.
+
+El checkpoint anterior aprobó 193 pruebas locales y 36 comprobaciones HTTP
+externas. El incremento del 11 de octubre requiere sus propias evidencias de
+check, CI, despliegue y pruebas; consultar `docs/ESTADO_SPRINT_1.md` para evitar
+atribuir los resultados anteriores a la versión nueva.
 
 ## Coordinación con Claude Code
 

@@ -5,7 +5,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import globals from 'globals';
 
 export default defineConfig([
-  globalIgnores(['.next/**', 'node_modules/**', 'next-env.d.ts']),
+  globalIgnores(['.next/**', 'node_modules/**', 'next-env.d.ts', '.facturia-local/**', 'public/document-tools/**']),
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {languageOptions: {globals: {...globals.browser, ...globals.node}}},

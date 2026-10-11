@@ -3,16 +3,19 @@
 import React from 'react';
 import { CfdiRecord } from '../lib/types';
 import { FileCheck, X, ShieldAlert, CheckCircle2, Copy } from 'lucide-react';
+import { SatStatusControls, type SatWorkspaceSnapshot } from './SatStatusControls';
 
 interface CfdiDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   cfdi: CfdiRecord | null;
+  demoMode?: boolean;
+  onSnapshotUpdated?: (snapshot: SatWorkspaceSnapshot) => void;
 }
 
 export const CfdiDetailModal: React.FC<CfdiDetailModalProps> = props => props.isOpen && props.cfdi ? <CfdiDetailContent key={props.cfdi.id} {...props} /> : null;
 
-const CfdiDetailContent: React.FC<CfdiDetailModalProps> = ({ isOpen, onClose, cfdi }) => {
+const CfdiDetailContent: React.FC<CfdiDetailModalProps> = ({ isOpen, onClose, cfdi, demoMode = true, onSnapshotUpdated }) => {
   const [copied, setCopied] = React.useState(false);
   const [copyError, setCopyError] = React.useState('');
   if (!isOpen || !cfdi) return null;
@@ -67,7 +70,7 @@ const CfdiDetailContent: React.FC<CfdiDetailModalProps> = ({ isOpen, onClose, cf
             <div>
               <strong className="font-sora">ALERTA EFOS REGISTRADA:</strong>
               <p className="mt-0.5">
-                El RFC {cfdi.rfcEmisor} fue marcado con una alerta EFOS. En la demostración se usa una lista de ejemplo; revisa la fuente oficial antes de tomar decisiones fiscales.
+                El RFC {cfdi.rfcEmisor} fue marcado con una alerta EFOS. {demoMode ? 'En la demostración se usa una lista de ejemplo; revisa la fuente oficial antes de tomar decisiones fiscales.' : 'Revisa la consulta registrada y la fuente oficial antes de tomar decisiones fiscales.'}
               </p>
             </div>
           </div>
@@ -75,6 +78,11 @@ const CfdiDetailContent: React.FC<CfdiDetailModalProps> = ({ isOpen, onClose, cf
 
         {/* Contenido */}
         <div className="p-6 space-y-4">
+          <SatStatusControls document={cfdi} demoMode={demoMode} onSnapshotUpdated={onSnapshotUpdated} />
+          {!demoMode && cfdi.attachment && <div className="p-3.5 rounded-xl border border-[oklch(0.30_0.03_260)] bg-[oklch(0.21_0.025_260)] text-xs space-y-1">
+            <a href={`/api/workspace/documents/${encodeURIComponent(cfdi.id)}/file`} className="text-[oklch(0.78_0.15_195)] underline underline-offset-2">Descargar archivo original {cfdi.attachment.source === 'pdf' ? 'PDF' : 'de imagen'}</a>
+            <p className="text-[oklch(0.68_0.03_250)]">{(cfdi.attachment.bytes / 1024).toFixed(1)} KiB. Guardado en tu cuenta; la lectura OCR requiere revisar los datos capturados.</p>
+          </div>}
           {/* UUID SAT */}
           <div className="p-3.5 rounded-xl bg-[oklch(0.21_0.025_260)] border border-[oklch(0.30_0.03_260)]">
             <div className="text-[10px] font-semibold uppercase text-[oklch(0.68_0.03_250)]">

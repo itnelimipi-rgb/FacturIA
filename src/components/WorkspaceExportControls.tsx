@@ -48,7 +48,7 @@ export function WorkspaceExportControls({mode, snapshot}: {mode: 'demo' | 'works
     <div className="flex flex-wrap items-center gap-3 text-xs">
       <button type="button" disabled={busy} onClick={downloadBackup} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-600 hover:bg-slate-800 disabled:opacity-50"><Download className="h-3.5 w-3.5" />{busy ? 'Preparando respaldo…' : 'Descargar respaldo JSON'}</button>
       <button type="button" disabled={busy || snapshot.transactions.length === 0} onClick={downloadCsv} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-600 hover:bg-slate-800 disabled:opacity-50"><Download className="h-3.5 w-3.5" />Exportar movimientos CSV</button>
-      <span className="text-slate-400">Guarda tus archivos en un lugar privado.</span>
+      <span className="text-slate-400">JSON: registros y XML originales. Descarga por separado los PDF e imágenes desde su detalle. Guarda tus archivos en un lugar privado.</span>
     </div>
     {error && <p role="alert" className="text-xs text-red-300">{error}</p>}
   </div>;

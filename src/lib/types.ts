@@ -50,6 +50,25 @@ export interface CfdiRecord {
   usoCfdi?: string;
   formaPago?: string;
   rawXml?: string;
+  satVerification?: SatVerification;
+  attachment?: {
+    contentType: 'application/pdf' | 'image/png' | 'image/jpeg' | 'image/webp';
+    bytes: number;
+    sha256: string;
+    source: 'pdf' | 'image';
+  };
+}
+
+/** A dated response from the fixed SAT consultation service, not a seal/XSD validation. */
+export interface SatVerification {
+  source: 'sat';
+  checkedAt: string;
+  outcome: 'found' | 'not_found' | 'invalid_query' | 'unavailable';
+  status: 'vigente' | 'cancelado' | 'no_verificado';
+  code?: 'S' | 'N601' | 'N602';
+  efos: 'listed' | 'not_listed' | 'unknown';
+  cancelability?: string;
+  cancellationStatus?: string;
 }
 
 export interface EfosEntry {

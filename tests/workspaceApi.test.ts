@@ -14,6 +14,7 @@ import { POST as workspaceRestore } from '../src/app/api/workspace/restore/route
 import { parseBankCsv } from '../src/lib/bankCsvParser';
 import type { WorkspaceSnapshot } from '../src/server/workspaceRepository';
 import type { createWorkspaceBackup } from '../src/lib/workspaceExport';
+import {applyTestMigrations} from './helpers/migrations';
 
 const baseURL = 'http://localhost:43211';
 const keys = ['DATABASE_URL', 'BETTER_AUTH_URL', 'BETTER_AUTH_SECRET', 'ALLOW_SIGNUP'] as const;
@@ -37,7 +38,7 @@ const password = 'Only-Local-API-Tests-2026!';
 
 before(async () => {
   await db.waitReady;
-  await db.exec(await readFile(path.resolve('db/migrations/001_workspace.sql'), 'utf8'));
+  await applyTestMigrations(db);
   rawXml = await readFile(path.resolve('tests/fixtures/sample-cfdi40.xml'), 'utf8');
   rawCsv = await readFile(path.resolve('tests/fixtures/sample-bank.csv'), 'utf8');
 });

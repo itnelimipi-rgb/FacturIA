@@ -5,23 +5,31 @@ import { UploadCloud, FileCode2, FileText, Image as ImageIcon, CheckCircle2, Ale
 import { XmlCfdiParser } from '../lib/xmlParser';
 import { EfosService } from '../lib/efosService';
 import { CfdiRecord } from '../lib/types';
+import { DocumentExtraction } from './DocumentExtraction';
+import { validateDocumentFile } from '../lib/documentExtraction';
+import type { DocumentSource } from '../lib/documentExtraction';
+import type { ProvisionalDocumentHandler } from './DocumentExtraction';
 
 interface UnifiedDropzoneProps {
   userId: string;
+  rfcReceptor: string;
   demoMode?: boolean;
-  onCfdiAdded: (cfdi: CfdiRecord, source: 'xml' | 'pdf' | 'image') => void | Promise<void>;
+  onCfdiAdded: (cfdi: CfdiRecord, source: 'xml' | 'pdf' | 'image' | 'manual') => void | Promise<void>;
+  onProvisionalAdded?: ProvisionalDocumentHandler;
 }
 
-export const UnifiedDropzone: React.FC<UnifiedDropzoneProps> = ({ userId, demoMode = false, onCfdiAdded }) => {
+export const UnifiedDropzone: React.FC<UnifiedDropzoneProps> = ({ userId, rfcReceptor, demoMode = false, onCfdiAdded, onProvisionalAdded }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isReading, setIsReading] = useState(false);
+  const [extractionFile, setExtractionFile] = useState<{file: File; source: DocumentSource} | null>(null);
+  const busy = isReading || extractionFile !== null;
   const [lastNotification, setLastNotification] = useState<{ type: 'success' | 'warning' | 'error'; title: string; detail: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const requestId = useRef(0);
   useEffect(() => () => { requestId.current++; }, []);
 
   const processXmlFile = async (file: File) => {
-    if (isReading) return;
+    if (busy) return;
     const currentRequest = ++requestId.current;
     setIsReading(true);
     setLastNotification(null);
@@ -51,18 +59,21 @@ export const UnifiedDropzone: React.FC<UnifiedDropzoneProps> = ({ userId, demoMo
   };
 
   const handleFiles = (files: FileList | null) => {
-    if (!files?.length || isReading) return;
+    if (!files?.length || busy) return;
     if (files.length > 1) {
-      setLastNotification({ type: 'warning', title: 'Selecciona un comprobante a la vez', detail: 'Carga cada XML por separado para revisar el resultado de importación.' });
+      setLastNotification({ type: 'warning', title: 'Selecciona un comprobante a la vez', detail: 'Carga cada documento por separado para revisar el resultado de importación.' });
       return;
     }
     const file = files[0];
     const name = file.name.toLowerCase();
     if (name.endsWith('.xml')) void processXmlFile(file);
     else if (/\.(pdf|jpg|jpeg|png|webp)$/.test(name)) {
-      setLastNotification({ type: 'warning', title: 'Extracción OCR pendiente de configurar', detail: 'Todavía no se extraen datos de PDF o imágenes. Carga el XML original del CFDI o registra un gasto provisional; este archivo no se guardó.' });
+      try {
+        const source = validateDocumentFile(file);
+        setLastNotification(null); setExtractionFile({file, source});
+      } catch (reason) { setLastNotification({type: 'error', title: 'No se pudo leer el archivo', detail: reason instanceof Error ? reason.message : 'Selecciona un documento válido.'}); }
     } else {
-      setLastNotification({ type: 'error', title: 'Formato no soportado', detail: 'Selecciona un XML CFDI. La extracción de PDF e imágenes está pendiente.' });
+      setLastNotification({ type: 'error', title: 'Formato no soportado', detail: 'Selecciona un XML CFDI, PDF, JPEG, PNG o WebP.' });
     }
   };
 
@@ -82,34 +93,41 @@ export const UnifiedDropzone: React.FC<UnifiedDropzoneProps> = ({ userId, demoMo
   return (
     <div className="w-full">
       <div
-        onDragOver={event => { event.preventDefault(); if (!isReading) setIsDragging(true); }}
+        onDragOver={event => { event.preventDefault(); if (!busy) setIsDragging(true); }}
         onDragLeave={() => setIsDragging(false)}
         onDrop={event => { event.preventDefault(); setIsDragging(false); handleFiles(event.dataTransfer.files); }}
-        onClick={() => { if (!isReading) fileInputRef.current?.click(); }}
-        onKeyDown={event => { if ((event.key === 'Enter' || event.key === ' ') && !isReading) { event.preventDefault(); fileInputRef.current?.click(); } }}
-        role="button" tabIndex={0} aria-label="Cargar archivo XML CFDI" aria-disabled={isReading}
+        onClick={() => { if (!busy) fileInputRef.current?.click(); }}
+        onKeyDown={event => { if ((event.key === 'Enter' || event.key === ' ') && !busy) { event.preventDefault(); fileInputRef.current?.click(); } }}
+        role="button" tabIndex={0} aria-label="Cargar XML, PDF o imagen" aria-disabled={busy}
         className={`relative border-2 border-dashed rounded-2xl p-6 sm:p-8 transition-all cursor-pointer flex flex-col items-center justify-center text-center ${isDragging ? 'border-[oklch(0.78_0.15_195)] bg-[oklch(0.78_0.15_195/0.1)] shadow-inner' : 'border-[oklch(0.30_0.03_260)] bg-[oklch(0.18_0.02_260)] hover:bg-[oklch(0.21_0.025_260)] hover:border-[oklch(0.78_0.15_195/0.5)]'}`}
       >
-        <input type="file" ref={fileInputRef} onClick={event => event.stopPropagation()} onChange={event => { handleFiles(event.target.files); event.target.value = ''; }} accept=".xml,.pdf,.jpg,.jpeg,.png,.webp" className="hidden" disabled={isReading} />
+        <input type="file" ref={fileInputRef} onClick={event => event.stopPropagation()} onChange={event => { handleFiles(event.target.files); event.target.value = ''; }} accept=".xml,.pdf,.jpg,.jpeg,.png,.webp" className="hidden" disabled={busy} />
         {isReading ? (
           <div className="flex flex-col items-center py-2"><Loader2 className="w-10 h-10 text-[oklch(0.78_0.15_195)] animate-spin" /><p className="mt-3 text-sm font-sora font-semibold text-white">Validando y guardando el XML…</p></div>
         ) : (
           <>
             <span className="p-3 mb-3 rounded-2xl bg-[oklch(0.78_0.15_195/0.14)] text-[oklch(0.78_0.15_195)] shadow-glow"><UploadCloud className="w-6 h-6" /></span>
             <h3 className="font-sora text-sm font-bold text-white">Cargar comprobante fiscal</h3>
-            <p className="text-xs text-[oklch(0.68_0.03_250)] max-w-md mt-1">Arrastra o selecciona el <strong className="text-[oklch(0.78_0.15_195)]">XML original del CFDI</strong>. Se revisan su estructura y sus importes sin enviar el archivo a una IA.</p>
+            <p className="text-xs text-[oklch(0.68_0.03_250)] max-w-md mt-1">Arrastra el <strong className="text-[oklch(0.78_0.15_195)]">XML original del CFDI</strong> o lee un PDF o imagen para revisar y registrar un gasto provisional.</p>
             <div className="flex flex-wrap items-center justify-center gap-2 mt-4 text-[11px]">
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[oklch(0.72_0.17_155/0.12)] text-[oklch(0.72_0.17_155)] border border-[oklch(0.72_0.17_155/0.3)]"><FileCode2 className="w-3 h-3" /> XML CFDI 4.0 / 3.3</span>
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[oklch(0.78_0.15_195/0.12)] text-[oklch(0.78_0.15_195)] border border-[oklch(0.78_0.15_195/0.3)]"><FileText className="w-3 h-3" /> PDF: pendiente</span>
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[oklch(0.65_0.20_295/0.12)] text-[oklch(0.65_0.20_295)] border border-[oklch(0.65_0.20_295/0.3)]"><ImageIcon className="w-3 h-3" /> OCR: pendiente</span>
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[oklch(0.78_0.15_195/0.12)] text-[oklch(0.78_0.15_195)] border border-[oklch(0.78_0.15_195/0.3)]"><FileText className="w-3 h-3" /> PDF: texto / OCR</span>
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[oklch(0.65_0.20_295/0.12)] text-[oklch(0.65_0.20_295)] border border-[oklch(0.65_0.20_295/0.3)]"><ImageIcon className="w-3 h-3" /> OCR en tu navegador</span>
             </div>
           </>
         )}
       </div>
+      {extractionFile && <DocumentExtraction file={extractionFile.file} source={extractionFile.source} userId={userId} rfcReceptor={rfcReceptor} demoMode={demoMode}
+        onClose={() => setExtractionFile(null)} onSave={async (document, source, file) => {
+          if (demoMode) await onCfdiAdded(document, 'manual');
+          else if (onProvisionalAdded) await onProvisionalAdded(document, source, file);
+          else throw new Error('No se pudo conectar el guardado del documento. Actualiza la página.');
+          setLastNotification({type: 'success', title: 'Gasto provisional guardado', detail: `Total: ${document.total.toFixed(2)} MXN. Sin UUID ni verificación SAT. ${demoMode ? 'Original no guardado en la demo.' : 'Original privado disponible en el detalle.'}`});
+        }} />}
       {demoMode && <div className="flex flex-wrap items-center gap-2 mt-3 px-1">
         <span className="text-[11px] text-[oklch(0.68_0.03_250)]">Sólo demostración:</span>
-        <button type="button" disabled={isReading} onClick={() => uploadSample(false)} className="text-[11px] px-2.5 py-1 rounded-lg border border-[oklch(0.30_0.03_260)] bg-[oklch(0.21_0.025_260)] text-white flex items-center gap-1.5 disabled:opacity-50"><FileCode2 className="w-3.5 h-3.5 text-[oklch(0.72_0.17_155)]" /> Probar XML de $12,400</button>
-        <button type="button" disabled={isReading} onClick={() => uploadSample(true)} className="text-[11px] px-2.5 py-1 rounded-lg bg-[oklch(0.65_0.22_25/0.1)] text-rose-300 border border-[oklch(0.65_0.22_25/0.35)] flex items-center gap-1.5 disabled:opacity-50"><ShieldCheck className="w-3.5 h-3.5" /> Probar alerta EFOS de ejemplo</button>
+        <button type="button" disabled={busy} onClick={() => uploadSample(false)} className="text-[11px] px-2.5 py-1 rounded-lg border border-[oklch(0.30_0.03_260)] bg-[oklch(0.21_0.025_260)] text-white flex items-center gap-1.5 disabled:opacity-50"><FileCode2 className="w-3.5 h-3.5 text-[oklch(0.72_0.17_155)]" /> Probar XML de $12,400</button>
+        <button type="button" disabled={busy} onClick={() => uploadSample(true)} className="text-[11px] px-2.5 py-1 rounded-lg bg-[oklch(0.65_0.22_25/0.1)] text-rose-300 border border-[oklch(0.65_0.22_25/0.35)] flex items-center gap-1.5 disabled:opacity-50"><ShieldCheck className="w-3.5 h-3.5" /> Probar alerta EFOS de ejemplo</button>
       </div>}
       {lastNotification && (
         <div role={lastNotification.type === 'success' ? 'status' : 'alert'} className={`mt-3 p-3.5 rounded-xl border flex items-start gap-3 ${lastNotification.type === 'success' ? 'bg-[oklch(0.72_0.17_155/0.12)] border-[oklch(0.72_0.17_155/0.35)] text-[oklch(0.72_0.17_155)]' : lastNotification.type === 'warning' ? 'bg-[oklch(0.80_0.16_75/0.12)] border-[oklch(0.80_0.16_75/0.35)] text-[oklch(0.80_0.16_75)]' : 'bg-[oklch(0.65_0.22_25/0.12)] border-[oklch(0.65_0.22_25/0.35)] text-rose-300'}`}>

@@ -9,6 +9,7 @@ import { XmlCfdiParser } from '../src/lib/xmlParser';
 import { createWorkspaceBackup } from '../src/lib/workspaceExport';
 import type { BankTransaction, CfdiRecord, Profile } from '../src/lib/types';
 import { HttpError } from '../src/server/http';
+import {applyTestMigrations} from './helpers/migrations';
 
 const db = new PGlite();
 const database = {connect: async () => ({query: (sql: string, values?: unknown[]) => db.query(sql, values), release() {}})} as unknown as Pick<Pool, 'connect'>;
@@ -20,7 +21,7 @@ const hasStatus = (status: number) => (error: unknown) => error instanceof HttpE
 
 before(async () => {
   await db.waitReady;
-  await db.exec(await readFile('db/migrations/001_workspace.sql', 'utf8'));
+  await applyTestMigrations(db);
   rawXml = await readFile('tests/fixtures/sample-cfdi40.xml', 'utf8');
   const parsed = XmlCfdiParser.parse(rawXml, source.id);
   assert.ok(parsed.success && parsed.cfdi);

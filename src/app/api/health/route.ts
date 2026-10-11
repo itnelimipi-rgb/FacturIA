@@ -11,7 +11,7 @@ export async function GET() {
   }
   try {
     getAuth();
-    await getPool().query('SELECT 1 FROM "user", session, account, verification, app_profiles, app_documents, app_bank_transactions, app_audit_events LIMIT 0');
+    await getPool().query('SELECT 1 FROM "user", session, account, verification, app_profiles, app_documents, app_bank_transactions, app_audit_events, app_rate_limits, app_document_files LIMIT 0');
     return Response.json({status: 'ok', mode: 'workspace'});
   } catch { return Response.json({status: 'unavailable', mode: 'workspace'}, {status: 503}); }
 }

@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     if (input.action === 'preview') {
       return Response.json({
         preview: await repository.previewRestore(user.id, input.backup),
-        warning: 'Se restaurará sólo en un espacio vacío. Los XML se validan de nuevo y la conciliación se recalcula; esto no consulta SAT ni EFOS. Se conservan las pausas y alertas previas. Tu perfil actual se conserva.',
+        warning: 'Se restaurará sólo en un espacio vacío. El JSON incluye registros y XML; los originales PDF e imágenes se descargan por separado y no se recuperan desde este JSON. Los XML se validan de nuevo y la conciliación se recalcula; esto no consulta SAT ni EFOS. Se conservan las pausas y alertas previas. Tu perfil actual se conserva.',
       }, {headers});
     }
     return Response.json(await repository.restore(user.id, input.backup), {headers});
