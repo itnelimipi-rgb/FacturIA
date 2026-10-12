@@ -132,6 +132,19 @@ test('a real fabricated movement listing is rejected even when it reuses known d
   assert.throws(() => safeLocalAssistantReply(`Hay seis movimientos:\n${invented}`, context));
 });
 
+test('document review help includes the verified guide and rejects the observed circular explanation', () => {
+  const context = buildLocalAssistantContext(snapshot());
+  const question = '¿Cómo reviso un movimiento ambiguo?';
+  const messages = localAssistantMessages(question, context);
+  assert.match(messages[1].content, /varias coincidencias posibles/);
+  assert.match(messages[1].content, /comprobante disputado por varios movimientos/);
+  assert.match(messages[1].content, /importe, moneda, fecha y RFC/);
+  assert.match(messages[1].content, /Un gasto provisional no es un CFDI timbrado/);
+  assert.throws(() => safeLocalAssistantReply('Para un movimiento ambiguo, primero debes verificar si es una transacción o movimiento de movimientos. Si es un movimiento de movimientos, sigue las instrucciones para el movimiento. Si es una transacción, sigue las reglas y indicadores de Facturía.', context, question), /guía por reglas/);
+  const useful = 'Un movimiento ambiguo tiene comprobantes candidatos. Compara el importe, la moneda y la fecha antes de elegir el comprobante correcto.';
+  assert.equal(safeLocalAssistantReply(useful, context, question), useful);
+});
+
 test('qualitative replies cannot introduce currencies absent from the recorded context', () => {
   const context = buildLocalAssistantContext(snapshot());
   for (const reply of ['Revisa los movimientos en USD.', 'La moneda EUR necesita revisión.', 'Revisa los comprobantes en ZAR.', 'Las operaciones en dólares requieren revisión.', 'Los comprobantes en euros están pendientes.']) assert.throws(() => safeLocalAssistantReply(reply, context), reply);

@@ -142,6 +142,65 @@ test('assistant refuses to fabricate fiscal savings or a live SAT check', async 
   assert.match(body.reply, /porcentajes simulados/);
 });
 
+test('assistant gives concrete ambiguity guidance without claiming the account has ambiguous records', async () => {
+  const response = await assistant(request('/api/assistant', {message: '¿Cómo reviso un movimiento ambiguo?', mode: 'demo', snapshot}));
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.mode, 'rules'); assert.equal(body.generatedByAI, false);
+  assert.match(body.reply, /varios comprobantes candidatos/);
+  assert.match(body.reply, /comprobante coincide con varios movimientos/);
+  assert.match(body.reply, /no elige automáticamente/);
+  assert.match(body.reply, /Facturas & Tesorería/);
+  assert.match(body.reply, /Revisar candidatos/);
+  assert.match(body.reply, /RFC, fecha, importe y moneda/);
+  assert.match(body.reply, /Vincular y Conciliar/);
+  assert.match(body.reply, /no confirma vigencia SAT/);
+  assert.doesNotMatch(body.reply, /Hay \d|Tienes \d|116/);
+});
+
+test('assistant explains discrepancy and documentary reconciliation without offering fiscal validation', async () => {
+  for (const [message, expected] of [['¿Qué significa discrepancia?', /no tiene un vínculo documental válido/], ['Explica el estado conciliado', /está vinculado a un comprobante compatible/]]) {
+    const response = await assistant(request('/api/assistant', {message, mode: 'demo', snapshot}));
+    const body = await response.json();
+    assert.equal(response.status, 200); assert.equal(body.generatedByAI, false);
+    assert.match(body.reply, expected as RegExp); assert.match(body.reply, /no confirma vigencia SAT/);
+    assert.match(body.reply, /no consulta SAT, no emite ni timbra/);
+  }
+});
+
+test('assistant distinguishes XML, bank CSV and editable provisional PDF or image imports', async () => {
+  const cases: [string, RegExp[]][] = [
+    ['¿Cómo importo un XML?', [/XML original del CFDI/, /estructura, RFC, fecha, importes y moneda/, /no acredita por sí solo/]],
+    ['¿Cómo se importa un CSV?', [/Seleccionar CSV/, /vista previa/, /importe con su signo y moneda/, /no crea comprobantes CFDI ni conecta/]],
+    ['¿Cómo importo un PDF?', [/lectura se realiza en tu navegador/, /Revisa y corrige RFC/, /gasto provisional/, /no supongas una tasa/, /no sustituye el XML timbrado ni crea un UUID/]],
+    ['¿Cómo importo una imagen?', [/lectura se realiza en tu navegador/, /IVA y retenciones/, /gasto provisional/]],
+  ];
+  for (const [message, checks] of cases) {
+    const response = await assistant(request('/api/assistant', {message, mode: 'demo', snapshot}));
+    const body = await response.json(); assert.equal(response.status, 200); assert.equal(body.mode, 'rules');
+    for (const pattern of checks) assert.match(body.reply, pattern);
+  }
+});
+
+test('mixed factual and fiscal questions retain recorded summaries or fiscal guard instead of workflow guides', async () => {
+  for (const message of ['¿Cómo reviso un movimiento ambiguo y dame el saldo?', '¿Tengo egresos registrados?']) {
+    const response = await assistant(request('/api/assistant', {message, mode: 'demo', snapshot}));
+    const body = await response.json(); assert.equal(response.status, 200); assert.equal(body.generatedByAI, false);
+    assert.match(body.reply, /Movimientos registrados en MXN/); assert.match(body.reply, /116/);
+    assert.doesNotMatch(body.reply, /abre Revisar candidatos/);
+  }
+  for (const message of ['¿Cómo deducir este gasto?', '¿Cómo reviso el IVA de un XML?', '¿Cómo timbro una factura?']) {
+    const response = await assistant(request('/api/assistant', {message, mode: 'demo', snapshot}));
+    const body = await response.json(); assert.equal(response.status, 200);
+    assert.match(body.reply, /este mensaje no realiza una consulta/); assert.match(body.reply, /necesitan revisión contable/);
+    assert.doesNotMatch(body.reply, /Vincular y Conciliar|captura|dedúcelo/i);
+  }
+  const incomeOnly = {...snapshot, transactions: [{...transaction, amount: 100}], cfdis: []};
+  const response = await assistant(request('/api/assistant', {message: '¿Tengo egresos registrados?', mode: 'demo', snapshot: incomeOnly}));
+  const body = await response.json(); assert.equal(response.status, 200);
+  assert.match(body.reply, /ingresos \$100\.00, egresos \$0\.00/);
+});
+
 test('assistant requires a demo snapshot and validates its request', async () => {
   const missingSnapshot = await assistant(request('/api/assistant', {message: 'Hola', mode: 'demo'}));
   assert.equal(missingSnapshot.status, 400);

@@ -9,6 +9,12 @@ También hay PostgreSQL local aislado para desarrollar sin depender de staging.
 
 ## Corrección del asistente — 12 de octubre
 
+Se añadió ayuda funcional por reglas para revisar candidatos, explicar estados e
+importar XML/CSV/PDF/imágenes, con preguntas mixtas y fiscales protegidas. La IA
+recibe una guía de esos procedimientos y se rechaza la explicación circular que
+se observó en la prueba real. La suite ampliada pasa 281 pruebas; el siguiente
+despliegue de esta ayuda aún debe confirmarse.
+
 El checkpoint `98b135f` pasó CI y Railway confirmó SUCCESS del deployment
 `8136e018-7442-4b58-bd51-d4522b453d6c`. Cuatro comprobaciones HTTPS de
 persistencia adicionales pasaron: 30 acumuladas para el incremento actual.
@@ -20,9 +26,19 @@ preguntas claras de ayuda o significado de estados y limita la IA a contexto cua
 sin conteos, fechas, importes o referencias de registros. Rechaza cifras incluso
 cuando coinciden con datos reales; intenta reglas ante una respuesta inválida y
 respeta cancelación explícita. Fallos del worker y timeout permiten recuperación.
-Pasaron 276 pruebas, lint, tipos y build; el nuevo despliegue
-y la verificación visual de esta corrección están pendientes.
-Consumo comprobado de recursos del workspace: USD 6.42, límite duro USD 10 activo.
+Pasaron 276 pruebas, lint, tipos y build. La auditoría completa npm del 12 de octubre
+reportó cero vulnerabilidades conocidas. Publicado como
+`b252d045ba40a2247630503e1bc7d97afcdac61f`, con
+[CI aprobado](https://github.com/itnelimipi-rgb/FacturIA/actions/runs/38217311426).
+Deployment exacto `0049720b-2832-4f7b-80b9-a0cea3c0c759`: **SUCCESS**,
+fijado a ese commit sólo en staging. Las cuatro comprobaciones HTTPS de las cuentas
+anteriores pasaron: 34 acumuladas en este incremento. La interfaz confirmó IA
+activa con resumen 3/1/1 por reglas y límite fiscal sin impuesto inventado.
+Una respuesta local rechazada recuperó las reglas automáticamente. La explicación
+del modelo sobre un movimiento ambiguo resultó circular; se añadió una guía real
+al prompt y ayuda determinista para los mismos procedimientos. Esta mejora está
+en validación antes del siguiente despliegue.
+Consumo comprobado de recursos del workspace: USD 6.43, límite duro USD 10 activo.
 
 ## Evidencia del incremento del 11 de octubre
 

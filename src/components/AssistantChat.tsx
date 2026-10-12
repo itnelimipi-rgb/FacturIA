@@ -159,7 +159,7 @@ const AssistantSession: React.FC<AssistantChatProps> = ({ mode, profile, metrics
           await bounded(engine.resetChat(), controller.signal, 10_000);
           const generated = await bounded(engine.chat.completions.create({messages: localAssistantMessages(text, context),
             max_tokens: 256, temperature: 0.1, top_p: 0.8, stream: false, extra_body: {resumable: {enabled: false}}}), controller.signal, 90_000);
-          reply = safeLocalAssistantReply(generated.choices[0]?.message.content ?? '', context);
+          reply = safeLocalAssistantReply(generated.choices[0]?.message.content ?? '', context, text);
           localAi = true;
         }
         if (mountedRef.current && !controller.signal.aborted) setMessages(previous => [...previous, {id: `a-${crypto.randomUUID()}`, sender: 'assistant', text: reply, localAi, rules: !localAi}]);

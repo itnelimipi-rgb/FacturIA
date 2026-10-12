@@ -8,6 +8,18 @@ para recursos de todo el workspace.
 
 ## Incremento del 11 de octubre implementado en código
 
+### Guías de revisión — 12 de octubre
+
+El asistente por reglas explica cómo revisar candidatos y los estados conciliado,
+ambiguo y discrepancia, y cómo importar XML/CSV o confirmar PDF/imágenes como
+gastos provisionales. Usa los controles existentes de la app y distingue el vínculo
+documental de la vigencia o deducibilidad. Incluye el caso de un CFDI disputado por
+varios movimientos. Las preguntas mixtas y fiscales conservan la ruta protegida.
+El modelo recibe la misma información de ayuda, sin datos cuantitativos privados;
+la explicación circular observada queda rechazada por una prueba de regresión.
+La suite ampliada pasa 281 pruebas. CI, despliegue y revisión visual de esta guía
+se registrarán al terminar su validación.
+
 ### Corrección del asistente — 12 de octubre
 
 El checkpoint `98b135f` pasó CI y está desplegado con SUCCESS en
@@ -26,10 +38,20 @@ válido y motivó esta corrección:
   esa recuperación; cancelar explícitamente no inicia una consulta automática.
 
 La corrección pasó **276 pruebas**, lint, TypeScript y build. Incluye regresiones
-del listado inventado, preguntas mixtas, recuperación de fallos y el falso positivo «Si ves…». Su despliegue y revisión
-visual aún deben completarse. Cuatro comprobaciones HTTPS adicionales de las
-cuentas anteriores pasaron tras desplegar `98b135f`: **30** acumuladas en este
-incremento. Las evidencias históricas siguientes conservan su fecha y alcance.
+del listado inventado, preguntas mixtas, recuperación de fallos y el falso positivo «Si ves…».
+Se publicó como `b252d045ba40a2247630503e1bc7d97afcdac61f`, con
+[CI aprobado](https://github.com/itnelimipi-rgb/FacturIA/actions/runs/38217311426).
+Railway confirmó SUCCESS de `0049720b-2832-4f7b-80b9-a0cea3c0c759`, fijado
+a ese SHA. Pasaron cuatro comprobaciones HTTPS de salud, aislamiento, persistencia
+y logout con cuentas anteriores: **34 acumuladas** en este incremento (26 iniciales,
+cuatro en `98b135f` y cuatro en `b252d04`). La demo conserva seis comprobantes y
+cinco movimientos. Con IA activa, la interfaz respondió el resumen 3/1/1 mediante
+reglas; la pregunta de ISR devolvió el límite fiscal sin cálculo inventado. También
+se observó recuperación automática a reglas tras rechazar una respuesta local.
+La explicación del modelo sobre un movimiento ambiguo resultó circular: se añadió
+una guía basada en el flujo real de la app al contexto del modelo y ayuda equivalente
+por reglas, con regresión del texto observado. Esa mejora está en validación.
+Las evidencias históricas siguientes conservan su fecha y alcance.
 
 - PDF.js lee PDF y Tesseract.js realiza OCR en español en el navegador. Workers,
   WASM y datos del idioma se sirven desde la app; no se usa una API OCR paga.
@@ -183,8 +205,9 @@ revisar checks, actualizar el pin sólo en staging y comprobar ese deployment.
 - Configurar y verificar entrega de correo, dominio/remitente autorizado e
   invitaciones antes de ampliar el piloto. Las cuotas compartidas ya están
   implementadas; su evidencia en la versión nueva se registrará tras las pruebas.
-- Ejecutar inferencia real de WebLLM y revisar fallos/cancelación en los navegadores
-  y dispositivos objetivo. La presencia del código no acredita rendimiento GPU.
+- Ampliar las pruebas de inferencia, calidad y fallos/cancelación de WebLLM a los
+  navegadores y dispositivos objetivo. La prueba real en este navegador no acredita
+  rendimiento o compatibilidad general; el modelo pequeño continúa experimental.
 - Revisar limitaciones y obtener aprobación del usuario para promover a main.
 
 OCR/PDF, consulta SAT e IA local tienen implementación en este incremento;
