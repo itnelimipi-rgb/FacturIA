@@ -13,6 +13,66 @@ const MAX_CURRENCIES = 5;
 
 export const LOCAL_AI_FISCAL_LIMIT = 'La IA local no determina deducciones ni impuestos, no emite o timbra facturas y no verifica sellos ni vigencia fiscal. Usa la consulta SAT del comprobante cuando esté disponible y revisa las decisiones fiscales con tu contador.';
 
+export type LocalAiSetupPhase = 'adapter' | 'module' | 'catalog' | 'model';
+export type LocalAiSetupCategory = 'cancelled' | 'timeout' | 'download' | 'gpu' | 'storage' | 'model_config' | 'unknown';
+const setupDiagnostics = {
+  cancelled: {code: 'AI_SETUP_CANCELLED', message: 'La activación se canceló. Puedes seguir usando reglas.'},
+  timeout: {code: 'AI_SETUP_TIMEOUT', message: 'Se agotó el tiempo de espera al preparar la IA local. Puedes volver a intentarlo o usar reglas.'},
+  download: {code: 'AI_SETUP_DOWNLOAD', message: 'No se pudieron cargar los archivos necesarios para la IA local. Puedes volver a intentarlo o usar reglas.'},
+  gpu: {code: 'AI_SETUP_GPU', message: 'WebGPU no pudo iniciar este modelo en tu dispositivo. Puedes seguir usando reglas.'},
+  storage: {code: 'AI_SETUP_STORAGE', message: 'El navegador no pudo usar el almacenamiento necesario para el modelo. Puedes seguir usando reglas.'},
+  model_config: {code: 'AI_SETUP_MODEL_CONFIG', message: 'La configuración o los archivos del modelo no son compatibles con esta versión. Puedes seguir usando reglas.'},
+  unknown: {code: 'AI_SETUP_UNKNOWN', message: 'No se pudo preparar la IA local. Puedes seguir usando reglas.'},
+} as const;
+
+export class LocalAiSetupError extends Error {
+  constructor(public readonly category: LocalAiSetupCategory) {
+    super(setupDiagnostics[category].message);
+    this.name = 'LocalAiSetupError';
+  }
+}
+
+/** WebLLM's worker rejects with strings. Return only static, allowlisted diagnostics. */
+export function localAiSetupDiagnostic(error: unknown) {
+  if (error instanceof LocalAiSetupError) return {...setupDiagnostics[error.category]};
+  let name = error instanceof Error ? error.name : '';
+  let message = error instanceof Error ? error.message.slice(0, 1024) : typeof error === 'string' ? error.slice(0, 1024).trim() : '';
+  // Strip only a leading error name; words appearing inside URLs or arbitrary
+  // application text must never be interpreted as evidence of a GPU failure.
+  for (let depth = 0; depth < 2 && (!name || name === 'Error'); depth++) {
+    const workerError = /^(Error|[A-Za-z][A-Za-z0-9]*Error):\s*([\s\S]*)$/.exec(message);
+    if (!workerError) break;
+    name = workerError[1]; message = workerError[2];
+  }
+  let category: LocalAiSetupCategory = 'unknown';
+  if (name === 'AbortError') category = 'cancelled';
+  else if (name === 'TimeoutError') category = 'timeout';
+  else if (['WebGPUNotAvailableError', 'WebGPUNotFoundError', 'ShaderF16SupportError', 'FeatureSupportError', 'DeviceLostError'].includes(name)) category = 'gpu';
+  else if (['QuotaExceededError', 'CrossContextLockUnavailableError'].includes(name) ||
+    (['SecurityError', 'InvalidStateError', 'TypeError', 'ReferenceError'].includes(name) &&
+      /^(?:caches is not defined|Failed to (?:read the ['"]caches['"] property|execute ['"](?:open|put|match)['"] on ['"]Cache(?:Storage)?['"]))/i.test(message))) category = 'storage';
+  else if (['ModelNotFoundError', 'SpecifiedModelNotFoundError', 'UnsupportedModelIdError', 'MissingModelWasmError', 'ArtifactManifestError', 'ConfigValueError', 'WindowSizeConfigurationError', 'WindowSizeSpecificationError', 'ReloadArgumentSizeUnmatchedError', 'ReloadModelIdNotUniqueError', 'UnsupportedTokenizerFilesError', 'IntegrityError', 'CompileError'].includes(name)) category = 'model_config';
+  else if (['NetworkError', 'ChunkLoadError'].includes(name) ||
+    (['Error', 'TypeError'].includes(name) && /^(?:Failed to fetch(?:\.|$)|NetworkError when attempting to fetch resource\.?$|Load failed\.?$|Cannot fetch https?:\/\/|Network response was not ok\.?$|Failed to execute ['"]add['"] on ['"]Cache['"]: Request failed)/i.test(message))) category = 'download';
+  return {...setupDiagnostics[category]};
+}
+
+/** Bound an operation and preserve the distinction between user cancellation and a deadline. */
+export function withLocalAiDeadline<T>(work: Promise<T>, signal: AbortSignal, milliseconds: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const cleanup = () => {clearTimeout(timer); signal.removeEventListener('abort', aborted);};
+    const finish = (callback: () => void) => {if (!settled) {settled = true; cleanup(); callback();}};
+    const aborted = () => finish(() => reject(signal.reason instanceof LocalAiSetupError ? signal.reason : new LocalAiSetupError('cancelled')));
+    const timer = setTimeout(() => finish(() => reject(new LocalAiSetupError('timeout'))), milliseconds);
+    signal.addEventListener('abort', aborted, {once: true});
+    // Always attach both handlers, including when an already-aborted signal is
+    // supplied. Late failures of a destroyed worker are consumed safely.
+    work.then(value => finish(() => resolve(value)), error => finish(() => reject(error)));
+    if (signal.aborted) aborted();
+  });
+}
+
 interface LocalMetric {
   currency: string;
   income: number;

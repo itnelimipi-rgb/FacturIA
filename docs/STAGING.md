@@ -11,7 +11,7 @@ También hay PostgreSQL local aislado para desarrollar sin depender de staging.
 - Proyecto nuevo: `facturia-staging`.
 - Entorno: `staging` (aislado de cualquier proyecto y servicio existente).
 - Servicio aplicación: `web`, una instancia Node 22, fuente `sprint-1` fijada al
-  commit `2916f18f2ae014e3ebac3d1b368db90d1b8869f4`, límite 500 MB RAM y 0.5 CPU,
+  commit `4b092620c74ccc8ab058ea9b24013c2f21458279`, límite 500 MB RAM y 0.5 CPU,
   con suspensión automática habilitada.
 - Servicio datos: PostgreSQL 18, una instancia, límite 250 MB RAM y 0.25 CPU,
   volumen persistente de 5000 MB y red privada, sin proxy TCP público.
@@ -25,7 +25,68 @@ Proyecto y configuración creados el 8 de octubre de 2026. Dominio asignado:
 y [espacio personal](https://web-staging-b090.up.railway.app/workspace). Consultar
 [estado del sprint](ESTADO_SPRINT_1.md) para el alcance de la verificación.
 
-## Despliegue y evidencia
+## Incremento del 11 de octubre
+
+El código se publicó como `4b092620c74ccc8ab058ea9b24013c2f21458279` en
+`sprint-1`, con autor y committer de la cuenta del usuario y sin coautores de IA.
+El [CI de ese commit](https://github.com/itnelimipi-rgb/FacturIA/actions/runs/38184805806)
+aprobó. Deployment `4e2c291e-456d-4407-a5e1-e6b1016ef9a8`: **SUCCESS**.
+Sólo se cambió el SHA del servicio web de staging; el predeploy aplicó las
+migraciones nuevas, sin reemplazar la base ni modificar otros proyectos.
+
+La versión agrega PDF/OCR local en español con revisión, originales privados
+y reintentos idempotentes, consulta SOAP oficial SAT de XML propios, asistente
+WebLLM opcional y cuotas compartidas en PostgreSQL. PDF/OCR e IA local usan el
+dispositivo del usuario, sin servidores GPU ni API de IA de pago. El dominio y
+correo real quedan pospuestos por indicación del usuario; no se configuran
+claves de correo ni se exige verificación mientras el proveedor esté desactivado.
+
+Pasaron 262 pruebas locales, lint, TypeScript y build. La auditoría npm completa
+reportó cero vulnerabilidades conocidas. Hubo 14 comprobaciones HTTP locales y
+tres posteriores al reinicio: PDF/hash, consulta SAT, propietarios y sesiones
+persistieron. El SAT respondió N602 al XML sintético, que conservó `no_verificado`.
+La ventana de cuota SAT había vencido antes de esta prueba de reinicio; no se
+atribuye a ella una comprobación de rechazo dentro de la ventana.
+
+El [ensayo de recuperación completa local](RECUPERACION_POSTGRES.md) comparó
+las 11 tablas e incluyó el archivo PDF privado. Esto es independiente de la
+restauración JSON de negocio: el JSON no incorpora los bytes de PDF/imágenes.
+En el clon local pasó una comprobación de 200 documentos y 200 movimientos;
+no acredita capacidad ni recuperación completa de Railway.
+
+## Verificación HTTPS e interfaz del incremento
+
+- 14 comprobaciones iniciales y cuatro tras reiniciar únicamente web: originales
+  privados, MIME/tamaño, propietario, idempotencia, cookies, sesión/origen y
+  consulta SAT. Se conservaron el PDF y su SHA-256, XML y consulta fechada.
+  La cuota SAT siguió rechazando el mismo XML dentro del minuto tras el reinicio.
+- Ocho comprobaciones adicionales reutilizaron cuentas sintéticas del checkpoint
+  anterior: perfiles, XML, movimientos, vínculos, pausas, exportaciones y nuevas
+  sesiones persistieron. Son **26 comprobaciones HTTPS de este incremento**,
+  independientes de las 36 del checkpoint anterior.
+- La interfaz leyó el PDF sintético y reconoció importes de una imagen mediante
+  OCR en español. Un subtotal incompatible con el total se rechazó antes de
+  guardar. El RFC no reconocido por OCR quedó vacío para revisión, sin inventarlo.
+- Se revisó el formulario a 390 × 844 y no hubo desbordamiento horizontal.
+  Los documentos de lectura se descartaron; la demo conservó seis comprobantes
+  y cinco movimientos con tres conciliados, uno ambiguo y una discrepancia.
+- Inicio de sesión visual en la cuenta sintética: detalle del original PDF y su
+  enlace privado; consulta SAT desde el botón del XML actualizó fecha y resultado
+  «comprobante no encontrado». No se usaron documentos ni credenciales fiscales reales.
+- WebLLM no logró preparar el modelo en este navegador de prueba. Se comprobó
+  el retorno a reglas y el resumen 3/1/1. Esto no acredita inferencia ni permite
+  atribuir el fallo a GPU o red. La revisión detectó que el SDK devuelve errores
+  del worker como texto; su clasificación segura ya quedó implementada en el
+  siguiente punto de guardado, con 271 pruebas y build aprobados. Registra sólo
+  código y fase y distingue cancelación de timeout, sin imprimir mensajes crudos,
+  URLs, claves, preguntas ni datos financieros.
+
+En staging, Better Auth no resolvió una IP confiable del proxy y usa un bucket
+compartido por ruta. Las cuotas se conservan en PostgreSQL. Las pruebas respetan
+`Retry-After`; revisar el encabezado confiable de la plataforma antes de ampliar
+el piloto, sin confiar indiscriminadamente en cabeceras enviadas por el cliente.
+
+## Checkpoint anterior: despliegue y evidencia del 8 de octubre
 
 - Deployment `201f3e6b-e8ae-41ad-965e-3865a5c13813`: **SUCCESS**, commit
   `2916f18f2ae014e3ebac3d1b368db90d1b8869f4` de `sprint-1`, creado con la cuenta
@@ -116,15 +177,18 @@ La migración `db/migrations` es para PostgreSQL independiente. El esquema antig
 ## Límites actuales
 
 La verificación HTTP externa cubre los flujos descritos, no una aprobación para
-producción. Falta revisar la interfaz, probar carga y ensayar backup/restore
-completo de PostgreSQL. La restauración JSON sólo admite un espacio vacío con
+producción. La recuperación completa y carga breve ya se ensayaron en el cluster
+local. Falta ensayar recuperación en el destino definitivo, retención y copia
+cifrada fuera de la PC, carga HTTP y revisión visual en dispositivos objetivo.
+La restauración JSON sólo admite un espacio vacío con
 perfil del mismo RFC, respaldos de cuenta y XML originales o documentos manuales.
-El proveedor de IA/OCR, SMTP, WhatsApp, bancos y SAT aún no está conectado.
-La primera etapa no calcula deducciones ni emite CFDI. El rate limit de
-autenticación en memoria requiere una sola instancia; configurar almacenamiento
-compartido antes de escalar y habilitar correo/invitaciones antes de ampliar el piloto.
+PDF/OCR y WebLLM se procesan localmente; SAT se consulta por XML propio. Correo
+real, WhatsApp y conexión directa a bancos siguen pendientes. No se calculan
+deducciones ni se emiten CFDI. Las cuotas compartidas usan PostgreSQL; medir el
+rendimiento y habilitar correo/invitaciones antes de ampliar el piloto.
 El piloto limita cada cuenta a 5,000 movimientos y 2,000 documentos acumulados;
-cada XML/CSV admite hasta 2 MB y cada descarga hasta 25 MiB. Ampliar estos límites
+cada XML/CSV admite hasta 2 MB y cada descarga JSON hasta 25 MiB. PDF/imágenes:
+5 MiB por archivo, 20 originales y 25 MiB acumulados por cuenta. Ampliar estos límites
 requiere medir el rendimiento. El registro abierto es temporal para estas pruebas.
 No admitir documentos ni usuarios reales hasta completar los requisitos del piloto.
 

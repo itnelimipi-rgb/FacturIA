@@ -124,13 +124,16 @@ misma suite. Los fixtures son sintéticos y no tienen validez fiscal.
 
 ## Estado y próximo avance
 
-El incremento del 11 de octubre pasó **262 pruebas**, lint, TypeScript y build, con
+El incremento del 11 de octubre pasó **271 pruebas**, lint, TypeScript y build, con
 auditoría npm completa sin vulnerabilidades conocidas. Los motores PDF/OCR
 leyeron fixtures sintéticos y hubo **14 comprobaciones HTTP locales** con
 PostgreSQL, descarga privada y respuesta SAT N602. La recuperación completa
 local coincidió en 11 tablas e incluyó el PDF original; también pasó una
-comprobación breve de carga en el clon. CI, publicación y revisión
-visual siguen en verificación y se registrarán en [staging](docs/STAGING.md).
+comprobación breve de carga en el clon. CI aprobó y el incremento está desplegado
+en staging, con **26 comprobaciones HTTPS**, incluida persistencia después de
+reiniciar web. PDF/OCR, login, consulta SAT y revisión móvil se probaron en la
+interfaz. WebLLM todavía no logró cargar en ese navegador; las reglas siguen
+disponibles. La evidencia está en [staging](docs/STAGING.md).
 El checkpoint anterior tuvo **36 comprobaciones HTTPS** de sus flujos y
 restauración JSON; se conserva su evidencia en el estado del sprint.
 

@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
+import {setTimeout as delay} from 'node:timers/promises';
 import { parseBankCsv } from '../src/lib/bankCsvParser.ts';
 
 class VerificationError extends Error {}
@@ -93,9 +94,19 @@ async function register(label) {
   return {account, cookie: cookieOf(response)};
 }
 async function signIn(account) {
-  const response = await expectResponse(request('/api/auth/sign-in/email', {
-    body: {email: account.email, password: account.password},
-  }), 200, 'Ingreso con credenciales sintéticas guardadas');
+  const body = {email: account.email, password: account.password};
+  let response = await request('/api/auth/sign-in/email', {body});
+  // A rejected login created no session. Respect its shared quota rather than
+  // weakening the application limit or retrying ambiguous transport failures.
+  if (response.status === 429) {
+    const seconds = Number(response.headers.get('x-retry-after') ?? response.headers.get('retry-after'));
+    check(Number.isFinite(seconds) && seconds > 0 && seconds <= 60, 'El ingreso requiere esperar antes de repetir las pruebas');
+    await response.body?.cancel();
+    console.log(`Pausa de ${seconds} segundos para respetar el límite de inicios de sesión.`);
+    await delay(seconds * 1000 + 100);
+    response = await request('/api/auth/sign-in/email', {body});
+  }
+  await expectResponse(Promise.resolve(response), 200, 'Ingreso con credenciales sintéticas guardadas');
   const data = await response.json();
   check(data.user?.id === account.id, 'El ingreso no conservó la identidad guardada');
   return cookieOf(response);

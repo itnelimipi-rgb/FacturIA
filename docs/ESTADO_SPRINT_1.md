@@ -36,7 +36,7 @@ para recursos de todo el workspace.
 - Cuotas compartidas en PostgreSQL para autenticación, originales, consultas
   SAT y envíos de correo; el contador no depende de memoria de una sola réplica.
 
-**Verificación local del incremento:** 262 pruebas, lint, TypeScript y build aprobados;
+**Verificación local del incremento:** 271 pruebas, lint, TypeScript y build aprobados;
 auditoría npm completa sin vulnerabilidades conocidas. PDF.js y Tesseract/WASM
 leyeron realmente los fixtures sintéticos. El flujo con PostgreSQL local aprobó
 14 comprobaciones HTTP, incluida respuesta SAT oficial N602 para un XML sintético,
@@ -46,8 +46,23 @@ La recuperación completa de PostgreSQL local coincidió en 11 tablas, esquema y
 contenido, incluido el PDF original. La comprobación de carga en el clon usó 200
 documentos, 200 movimientos y 20 lecturas a concurrencia 2; p50 204 ms y p95 358 ms.
 Consultar [el ensayo de recuperación](RECUPERACION_POSTGRES.md) para límites y
-custodia privada. CI, despliegue y prueba visual del incremento
-siguen en verificación hasta registrar sus resultados.
+custodia privada. El CI del commit `4b09262` aprobó y Railway confirmó SUCCESS
+del deployment `4e2c291e-456d-4407-a5e1-e6b1016ef9a8`.
+
+La versión pasó 26 comprobaciones HTTPS: 14 iniciales, cuatro después de reiniciar
+sólo web y ocho de cuentas anteriores. PDF/hash, XML, consulta SAT, propietarios,
+vínculos, pausas y sesiones persistieron; también persistió el rechazo de cuota
+SAT dentro de su ventana de un minuto. La interfaz leyó PDF/OCR sintéticos,
+rechazó total inconsistente y se revisó a 390 × 844 sin desbordamiento horizontal.
+La demo conservó su escenario inicial. Login y consulta SAT por botón funcionaron.
+
+La activación de WebLLM falló en este navegador; el asistente por reglas siguió
+respondiendo 3 conciliados, 1 ambiguo y 1 en discrepancia. No se acredita inferencia
+del modelo. Se corrigió el diagnóstico de errores del worker como texto: ahora
+clasifica descarga, GPU, almacenamiento, configuración, cancelación y timeout
+mediante códigos permitidos. Sólo registra código y fase, sin texto crudo ni
+secretos. Nueve pruebas adicionales cubren strings reales del SDK, redacción,
+cancelación y rechazos tardíos. La nueva revisión visual se hará al desplegarlo.
 
 El usuario pidió posponer dominio y correo real el 11 de octubre. El transporte
 de correo se conserva desactivado; sus pruebas usan un proveedor simulado y
@@ -139,9 +154,9 @@ revisar checks, actualizar el pin sólo en staging y comprobar ese deployment.
 - Ensayar recuperación en el destino definitivo, definir retención y copia
   cifrada fuera de la PC y medir carga HTTP antes de admitir datos reales.
   El ensayo local completo y la concurrencia de dos restauraciones JSON pasaron.
-- Prueba visual completa de demo y espacio autenticado. El control del navegador
-  local fue bloqueado por su política de acceso y el controlador de staging
-  falló al inicializar sus recursos; no se da por comprobada.
+- Ampliar las pruebas visuales a los navegadores y dispositivos objetivo. La
+  revisión de staging cubrió PDF/OCR, error de total, formulario móvil, login,
+  detalles privados, consulta SAT y respuesta por reglas; no acredita toda la app.
 - Configurar y verificar entrega de correo, dominio/remitente autorizado e
   invitaciones antes de ampliar el piloto. Las cuotas compartidas ya están
   implementadas; su evidencia en la versión nueva se registrará tras las pruebas.

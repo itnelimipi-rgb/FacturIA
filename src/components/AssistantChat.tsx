@@ -5,7 +5,9 @@ import { Send, Bot, User } from 'lucide-react';
 import { CashFlowMetrics, BankTransaction, CfdiRecord, Profile } from '../lib/types';
 import type { MLCEngineInterface } from '@mlc-ai/web-llm';
 import { buildLocalAssistantContext, isFiscalDecisionQuestion, localAssistantMessages, safeLocalAssistantReply,
+  localAiSetupDiagnostic, LocalAiSetupError, withLocalAiDeadline as bounded,
   LOCAL_AI_MODEL_ID, LOCAL_AI_DOWNLOAD_MB, LOCAL_AI_GPU_MB, LOCAL_AI_FISCAL_LIMIT, MAX_LOCAL_AI_QUESTION_CHARS } from '../lib/localAssistant';
+import type {LocalAiSetupPhase} from '../lib/localAssistant';
 
 interface Message {
   id: string;
@@ -20,17 +22,6 @@ interface AssistantChatProps {
   metrics: CashFlowMetrics;
   transactions: BankTransaction[];
   cfdis: CfdiRecord[];
-}
-
-function bounded<T>(promise: Promise<T>, signal: AbortSignal, milliseconds: number): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const stop = () => { cleanup(); reject(new Error('Consulta interrumpida')); };
-    const timer = setTimeout(stop, milliseconds);
-    const cleanup = () => { clearTimeout(timer); signal.removeEventListener('abort', stop); };
-    signal.addEventListener('abort', stop, {once: true});
-    if (signal.aborted) { stop(); return; }
-    promise.then(value => { cleanup(); resolve(value); }, error => { cleanup(); reject(error); });
-  });
 }
 
 // Remount for each account and mode, so private history and the worker cannot cross accounts.
@@ -79,19 +70,23 @@ const AssistantSession: React.FC<AssistantChatProps> = ({ mode, profile, metrics
     setAiError(''); setProgress(0); setAiState('loading');
     const controller = new AbortController();
     controllerRef.current = controller;
+    let phase: LocalAiSetupPhase = 'adapter';
     try {
       const gpu = (navigator as Navigator & {gpu?: {requestAdapter(): Promise<{features: {has(value: string): boolean}} | null>}}).gpu;
-      if (!window.isSecureContext || !gpu) throw new Error('WebGPU no está disponible en este navegador. Usa un navegador con WebGPU habilitado o conserva las reglas.');
+      if (!window.isSecureContext || !gpu) throw new LocalAiSetupError('gpu');
       const adapter = await bounded(gpu.requestAdapter(), controller.signal, 10_000);
-      if (!adapter || !adapter.features.has('shader-f16')) throw new Error('La GPU no admite el modelo local seleccionado. El asistente por reglas sigue disponible.');
+      if (!adapter || !adapter.features.has('shader-f16')) throw new LocalAiSetupError('gpu');
+      phase = 'module';
       const webllm = await bounded(import('@mlc-ai/web-llm'), controller.signal, 30_000);
       if (controller.signal.aborted || !mountedRef.current) return;
+      phase = 'catalog';
       const model = webllm.prebuiltAppConfig.model_list.find(record => record.model_id === LOCAL_AI_MODEL_ID);
       if (!model || model.model !== `https://huggingface.co/mlc-ai/${LOCAL_AI_MODEL_ID}` ||
-          !model.model_lib.startsWith('https://raw.githubusercontent.com/mlc-ai/binary-mlc-llm-libs/main/web-llm-models/v0_2_86/')) throw new Error('El catálogo del modelo no coincide con la versión revisada.');
+          !model.model_lib.startsWith('https://raw.githubusercontent.com/mlc-ai/binary-mlc-llm-libs/main/web-llm-models/v0_2_86/')) throw new LocalAiSetupError('model_config');
+      phase = 'model';
       const worker = new Worker(new URL('../lib/localAssistant.worker.ts', import.meta.url), {type: 'module', name: 'facturia-local-ai'});
       workerRef.current = worker;
-      worker.onerror = () => { controllerRef.current?.abort(); };
+      worker.onerror = () => { controllerRef.current?.abort(new LocalAiSetupError('unknown')); };
       const engine = new webllm.WebWorkerMLCEngine(worker, {appConfig: {model_list: [model], cacheBackend: 'cache'}, logLevel: 'ERROR',
         initProgressCallback: report => { if (mountedRef.current && !controller.signal.aborted) setProgress(Number.isFinite(report.progress) ? Math.min(100, Math.max(0, Math.round(report.progress * 100))) : 0); }});
       engineRef.current = engine;
@@ -100,11 +95,13 @@ const AssistantSession: React.FC<AssistantChatProps> = ({ mode, profile, metrics
       controllerRef.current = null; setAiState('ready'); setProgress(100);
     } catch (error) {
       const ownsOperation = controllerRef.current === controller;
-      const wasCancelled = controller.signal.aborted;
+      const diagnostic = localAiSetupDiagnostic(error);
       if (ownsOperation) destroyLocalEngine();
       if (mountedRef.current && ownsOperation) {
+        // No raw worker errors, URLs, questions, financial data or secrets are logged.
+        console.warn(JSON.stringify({code: diagnostic.code, phase}));
         setAiState('rules');
-        setAiError(wasCancelled ? 'La activación se canceló. Puedes seguir usando reglas.' : error instanceof Error && /(?:WebGPU|GPU no admite|catálogo)/.test(error.message) ? error.message : 'No se pudo preparar la IA local. Revisa conexión y memoria GPU, o usa reglas.');
+        setAiError(diagnostic.message);
       }
     } finally { if (controllerRef.current === controller || controllerRef.current === null) loadingRef.current = false; }
   }
