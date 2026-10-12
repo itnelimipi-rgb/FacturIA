@@ -7,11 +7,30 @@ Railway Agent e impuestos tienen tratamiento independiente: no ejecutar Agent
 ni contratar integraciones adicionales sin revisar el presupuesto.
 También hay PostgreSQL local aislado para desarrollar sin depender de staging.
 
+## Corrección del asistente — 12 de octubre
+
+El checkpoint `98b135f` pasó CI y Railway confirmó SUCCESS del deployment
+`8136e018-7442-4b58-bd51-d4522b453d6c`. Cuatro comprobaciones HTTPS de
+persistencia adicionales pasaron: 30 acumuladas para el incremento actual.
+WebLLM cargó y realizó inferencia real, pero produjo un listado de seis movimientos
+donde la demo contiene cinco. No se acepta ese resultado.
+
+La corrección pasa resúmenes/cifras y presencia de registros a reglas, admite sólo
+preguntas claras de ayuda o significado de estados y limita la IA a contexto cualitativo,
+sin conteos, fechas, importes o referencias de registros. Rechaza cifras incluso
+cuando coinciden con datos reales; intenta reglas ante una respuesta inválida y
+respeta cancelación explícita. Fallos del worker y timeout permiten recuperación.
+Pasaron 276 pruebas, lint, tipos y build; el nuevo despliegue
+y la verificación visual de esta corrección están pendientes.
+Consumo comprobado de recursos del workspace: USD 6.42, límite duro USD 10 activo.
+
+## Evidencia del incremento del 11 de octubre
+
 - Workspace: Danipb15's Projects.
 - Proyecto nuevo: `facturia-staging`.
 - Entorno: `staging` (aislado de cualquier proyecto y servicio existente).
 - Servicio aplicación: `web`, una instancia Node 22, fuente `sprint-1` fijada al
-  commit `4b092620c74ccc8ab058ea9b24013c2f21458279`, límite 500 MB RAM y 0.5 CPU,
+  commit indicado en la corrección más reciente, límite 500 MB RAM y 0.5 CPU,
   con suspensión automática habilitada.
 - Servicio datos: PostgreSQL 18, una instancia, límite 250 MB RAM y 0.25 CPU,
   volumen persistente de 5000 MB y red privada, sin proxy TCP público.

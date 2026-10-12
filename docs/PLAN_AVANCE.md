@@ -69,8 +69,9 @@ pruebas de cookies y proxy en Railway, además de las pruebas locales PostgreSQL
   hash de contenido e idempotencia para reintentos sin documentos duplicados.
 - IA local opcional y experimental con WebLLM y Qwen2.5 0.5B: WebGPU, descarga
   aproximada de 320 MB desde Hugging Face/MLC y activación explícita. Sin clave
-  de API ni servidor GPU; contexto acotado de registros propios y referencias.
-  Indicadores deterministas y asistente por reglas permanecen disponibles.
+  de API ni servidor GPU; sólo presencia de estados y monedas como contexto.
+  Los resúmenes y cifras se responden con reglas, incluso con el modelo activo.
+  Un resultado local rechazado vuelve a las reglas, salvo cancelación del usuario.
 - Verificar visualmente carga, lectura, cancelación, errores y revisión antes
   de guardar; probar inferencia real y dispositivos con/sin WebGPU. Si hace falta
   una API o modelo distinto, definir proveedor y cuotas gratuitas con el usuario

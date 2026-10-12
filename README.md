@@ -42,9 +42,11 @@ del checkpoint anterior se distinguen al final de este documento.
   reglas que resume los datos disponibles.
 - Asistente de IA local **opcional y experimental** con WebLLM y Qwen2.5 0.5B.
   Requiere WebGPU y descarga aproximadamente 320 MB de modelo desde Hugging Face
-  y MLC. Las preguntas y el resumen se procesan en el dispositivo; no requiere
-  clave de API ni un servidor GPU. La activación es explícita y el asistente por
-  reglas sigue disponible. La inferencia real en navegador aún requiere prueba.
+  y MLC. Explica estados con contexto cualitativo en el dispositivo; no recibe
+  importes, fechas, conteos ni referencias de registros. Las preguntas sobre cifras
+  y resúmenes usan reglas verificadas, incluso con el modelo activo. No requiere
+  clave de API ni servidor GPU. Las respuestas locales que no pasan los controles
+  se descartan y se intenta responder con reglas.
 - Consulta SOAP al servicio oficial SAT para un XML propio: vigencia, resultado,
   fecha y EFOS cuando la respuesta lo proporciona. Un documento no encontrado o
   una falla del servicio conserva `no_verificado`; una consulta no valida sellos.
@@ -124,7 +126,7 @@ misma suite. Los fixtures son sintéticos y no tienen validez fiscal.
 
 ## Estado y próximo avance
 
-El incremento del 11 de octubre pasó **271 pruebas**, lint, TypeScript y build, con
+El incremento del 11 de octubre y su corrección del asistente pasaron **276 pruebas**, lint, TypeScript y build, con
 auditoría npm completa sin vulnerabilidades conocidas. Los motores PDF/OCR
 leyeron fixtures sintéticos y hubo **14 comprobaciones HTTP locales** con
 PostgreSQL, descarga privada y respuesta SAT N602. La recuperación completa
@@ -132,8 +134,10 @@ local coincidió en 11 tablas e incluyó el PDF original; también pasó una
 comprobación breve de carga en el clon. CI aprobó y el incremento está desplegado
 en staging, con **26 comprobaciones HTTPS**, incluida persistencia después de
 reiniciar web. PDF/OCR, login, consulta SAT y revisión móvil se probaron en la
-interfaz. WebLLM todavía no logró cargar en ese navegador; las reglas siguen
-disponibles. La evidencia está en [staging](docs/STAGING.md).
+interfaz. WebLLM cargó y generó texto en el navegador. La revisión encontró un
+resumen inventado: por ello el modelo quedó limitado a explicaciones cualitativas,
+con prueba de regresión y respuestas de cifras por reglas. La comprobación visual
+de esta corrección se registra al desplegarla en [staging](docs/STAGING.md).
 El checkpoint anterior tuvo **36 comprobaciones HTTPS** de sus flujos y
 restauración JSON; se conserva su evidencia en el estado del sprint.
 

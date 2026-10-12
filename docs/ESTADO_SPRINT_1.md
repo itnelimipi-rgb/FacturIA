@@ -1,4 +1,4 @@
-# Estado del sprint — 11 de octubre de 2026
+# Estado del sprint — 12 de octubre de 2026
 
 Trabajo publicado en `sprint-1` del repositorio público, con autoría de la cuenta
 GitHub `d1512pb` del usuario y sin coautores de IA. `main` permanece intacto;
@@ -7,6 +7,29 @@ Railway staging está activo con datos sintéticos y límite duro de USD 10
 para recursos de todo el workspace.
 
 ## Incremento del 11 de octubre implementado en código
+
+### Corrección del asistente — 12 de octubre
+
+El checkpoint `98b135f` pasó CI y está desplegado con SUCCESS en
+`8136e018-7442-4b58-bd51-d4522b453d6c`. La carga del modelo y una inferencia
+real funcionaron en el navegador. La revisión detectó que mezcló comprobantes
+con movimientos y enumeró seis cuando la demo tiene cinco. Ese resultado no es
+válido y motivó esta corrección:
+
+- Cifras, conteos, listados, presencia de registros y resúmenes se consultan mediante
+  reglas, aun con IA activa. Sólo las preguntas claras de ayuda o significado de
+  estados llegan al modelo; preguntas fiscales o mixtas usan reglas.
+- El modelo sólo recibe presencia de estados y monedas, sin importes, fechas,
+  conteos ni identificadores. Se limita a explicar cómo revisar los estados.
+- Respuestas con cifras, cantidades escritas o referencias DOC/MOV se rechazan;
+  se intenta una respuesta por reglas. Un fallo del worker o timeout también permite
+  esa recuperación; cancelar explícitamente no inicia una consulta automática.
+
+La corrección pasó **276 pruebas**, lint, TypeScript y build. Incluye regresiones
+del listado inventado, preguntas mixtas, recuperación de fallos y el falso positivo «Si ves…». Su despliegue y revisión
+visual aún deben completarse. Cuatro comprobaciones HTTPS adicionales de las
+cuentas anteriores pasaron tras desplegar `98b135f`: **30** acumuladas en este
+incremento. Las evidencias históricas siguientes conservan su fecha y alcance.
 
 - PDF.js lee PDF y Tesseract.js realiza OCR en español en el navegador. Workers,
   WASM y datos del idioma se sirven desde la app; no se usa una API OCR paga.
@@ -36,7 +59,7 @@ para recursos de todo el workspace.
 - Cuotas compartidas en PostgreSQL para autenticación, originales, consultas
   SAT y envíos de correo; el contador no depende de memoria de una sola réplica.
 
-**Verificación local del incremento:** 271 pruebas, lint, TypeScript y build aprobados;
+**Verificación local inicial del incremento:** 262 pruebas, lint, TypeScript y build aprobados;
 auditoría npm completa sin vulnerabilidades conocidas. PDF.js y Tesseract/WASM
 leyeron realmente los fixtures sintéticos. El flujo con PostgreSQL local aprobó
 14 comprobaciones HTTP, incluida respuesta SAT oficial N602 para un XML sintético,

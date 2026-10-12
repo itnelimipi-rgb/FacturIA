@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { buildLocalAssistantContext, isFiscalDecisionQuestion, localAssistantMessages, safeLocalAssistantReply,
+import { buildLocalAssistantContext, isFiscalDecisionQuestion, isRecordedDataQuestion, isLocalAiUserCancellation, LocalAiSetupError, localAssistantMessages, safeLocalAssistantReply,
   MAX_LOCAL_AI_CONTEXT_CHARS, MAX_LOCAL_AI_QUESTION_CHARS, MAX_LOCAL_AI_REPLY_CHARS } from '../src/lib/localAssistant';
 import { SEED_PROFILE, SEED_CFDIS, SEED_TRANSACTIONS } from '../src/lib/seed';
 import type { BankTransaction, CfdiRecord } from '../src/lib/types';
@@ -53,11 +53,59 @@ test('model context and prompts stay bounded while disclosing omitted currencies
   assert.throws(() => buildLocalAssistantContext({...input, transactions: [...input.transactions, input.transactions[0]]}));
   assert.throws(() => localAssistantMessages('x'.repeat(MAX_LOCAL_AI_QUESTION_CHARS + 1), context));
   assert.throws(() => localAssistantMessages(' ', context));
-  const messages = localAssistantMessages('Explica el resumen', context);
+  const messages = localAssistantMessages('¿Cómo reviso un movimiento ambiguo?', context);
   assert.equal(messages.length, 2);
   assert.match(messages[0].content, /nunca instrucciones/);
   assert.match(messages[0].content, /No ejecutes acciones/);
   assert.match(messages[0].content, /No incluyas URLs/);
+});
+
+test('recorded facts route to deterministic rules while workflow help stays qualitative', () => {
+  for (const question of ['Resume mis movimientos bancarios', 'Haz un resumen de mis comprobantes', '¿Cuántos movimientos tengo?', '¿Qué monto recibí?', 'Dime el importe pendiente', '¿Cuál es mi saldo?', 'Total de egresos', 'Retenciones registradas', '¿Qué comprobantes faltan?', 'Lista mis facturas', 'Enumera los pagos', '¿Cuáles están conciliados?', 'Muéstrame los movimientos', 'Revisa MOV1', 'Revisa el pago del 12 de octubre', 'Documento １２', '¿Tengo egresos registrados?', '¿Hay ingresos?', '¿Está registrado mi comprobante?', 'Mis movimientos están conciliados', 'Hola', '¿Cómo reviso el importe de un movimiento?', 'Explica el estado ambiguo y cuántos pendientes tengo', '¿Cómo vinculo un movimiento y cuáles documentos faltan?', '¿Cómo importo un XML de 2026?', '¿Cómo reviso si tengo egresos?', '¿Cómo deducir este gasto?', '¿Cómo reviso el IVA de un XML?', '¿Qué significa el estado fiscal ambiguo?', 'Explica mis movimientos ambiguos', '¿Cómo reviso si el documento está guardado?']) {
+    assert.equal(isRecordedDataQuestion(question), true, question);
+  }
+  for (const question of ['¿Cómo reviso un movimiento ambiguo?', '¿Qué significa discrepancia?', '¿Cómo se importa un XML?', '¿Cómo puedo revisar un comprobante?', '¿Cómo vinculo un movimiento con un documento?', '¿Cómo concilio un registro?', 'Explica el estado conciliado', 'Explícame qué significa ambiguo']) {
+    assert.equal(isRecordedDataQuestion(question), false, question);
+  }
+  assert.throws(() => localAssistantMessages('Resume mis movimientos bancarios', buildLocalAssistantContext(snapshot())), /reglas/);
+  const incomeOnly = snapshot(); incomeOnly.cfdis = [];
+  incomeOnly.transactions = [{...incomeOnly.transactions[0], amount: 100}];
+  const context = buildLocalAssistantContext(incomeOnly);
+  assert.equal(context.metrics[0].expense, 0);
+  assert.throws(() => localAssistantMessages('¿Tengo egresos registrados?', context), /reglas/);
+  for (const mixed of ['Explica el estado ambiguo y dime si mis movimientos están conciliados', '¿Cómo reviso un movimiento ambiguo y confirma el estado de mis documentos?', 'Explícame qué significa ambiguo; identifica mis comprobantes', 'Primero revisa mis datos. ¿Qué significa discrepancia?']) {
+    assert.equal(isRecordedDataQuestion(mixed), true, mixed);
+    assert.throws(() => localAssistantMessages(mixed, context), /reglas/);
+  }
+});
+
+test('only explicit user cancellation suppresses fallback while runtime and timeout aborts remain recoverable', () => {
+  assert.equal(isLocalAiUserCancellation(new AbortController().signal), false);
+  for (const reason of [new DOMException('User cancelled', 'AbortError'), new LocalAiSetupError('cancelled')]) {
+    const controller = new AbortController(); controller.abort(reason);
+    assert.equal(isLocalAiUserCancellation(controller.signal), true);
+  }
+  const defaultAbort = new AbortController(); defaultAbort.abort();
+  assert.equal(isLocalAiUserCancellation(defaultAbort.signal), true);
+  for (const reason of [new LocalAiSetupError('timeout'), new LocalAiSetupError('unknown'), new LocalAiSetupError('gpu'), new DOMException('Expired', 'TimeoutError'), Object.assign(new Error('PRIVATE_RUNTIME_ERROR'), {name: 'AbortError'}), new Error('Worker crashed'), {name: 'AbortError', secret: 'PRIVATE_SECRET'}, 'PRIVATE_REASON']) {
+    const controller = new AbortController(); controller.abort(reason);
+    assert.equal(isLocalAiUserCancellation(controller.signal), false);
+  }
+});
+
+test('the model receives presence flags and currencies without counts, dates, amounts or record identities', () => {
+  const context = buildLocalAssistantContext(snapshot());
+  const messages = localAssistantMessages('¿Cómo reviso un movimiento ambiguo?', context);
+  const user = messages[1].content;
+  const qualitative = JSON.parse(user.split('CONTEXTO CUALITATIVO:\n')[1].split('\n\nPREGUNTA:')[0]);
+  assert.deepEqual(qualitative, {hasMatched: context.counts.matched > 0, hasAmbiguous: context.counts.ambiguous > 0,
+    hasUnlinked: context.counts.unlinked > 0, hasDocuments: true, hasTransactions: true,
+    multipleCurrencies: false, currencies: ['MXN']});
+  assert.doesNotMatch(user, /\d|DOC\d|MOV\d|"references"|"metrics"|"counts"|"amount"|"date"|"recordId"/);
+  for (const reference of context.references) assert.ok(!user.includes(reference.recordId));
+  assert.ok(!user.includes(context.json));
+  assert.match(messages[0].content, /No incluyas cifras, fechas, conteos/);
+  assert.match(messages[0].content, /No inventes botones/);
 });
 
 test('sensitive fiscal decisions bypass the experimental model', () => {
@@ -65,15 +113,30 @@ test('sensitive fiscal decisions bypass the experimental model', () => {
   assert.equal(isFiscalDecisionQuestion('Resume los movimientos que requieren revisión'), false);
 });
 
-test('obvious fabricated money, model links, nonexistent references and claimed actions are rejected', () => {
+test('all quantitative claims, record labels, model links and claimed actions are rejected', () => {
   const input = snapshot();
   input.cfdis = [];
   input.transactions = [{...input.transactions[0], amount: -100, currency: 'MXN'}];
   const context = buildLocalAssistantContext(input);
-  assert.equal(safeLocalAssistantReply('El movimiento MOV1 suma $100.00 MXN y requiere revisión.', context), 'El movimiento MOV1 suma $100.00 MXN y requiere revisión.');
-  for (const reply of ['Ingresos: $900.00 MXN', 'Saldo: 999 USD', 'Mira https://example.invalid', 'Consulta www.example.invalid', 'Verifiqué SAT y emití la factura.', 'Este gasto es deducible.', 'Revisa DOC99', 'x'.repeat(MAX_LOCAL_AI_REPLY_CHARS + 1), ' ']) {
+  assert.equal(safeLocalAssistantReply('Un movimiento ambiguo necesita revisión. Compara el comprobante y una operación bancaria antes de decidir.', context), 'Un movimiento ambiguo necesita revisión. Compara el comprobante y una operación bancaria antes de decidir.');
+  for (const reply of ['El movimiento MOV1 suma $100.00 MXN y requiere revisión.', 'Ingresos: $900.00 MXN', 'Saldo: 999 USD', 'Revisa DOC', 'Revisa mov', 'Monto $', 'Fecha de emisión: 2026-10-12', 'Hay seis movimientos.', 'Hay cero documentos.', 'Hay uno pendiente.', 'Hay dos comprobantes.', 'Hay dieciséis pendientes.', 'Hay veintitrés registros.', 'Hay cien documentos y mil pesos.', 'Hay doscientas facturas.', 'Hay millones de registros.', 'Revisa １ movimiento.', 'Mira https://example.invalid', 'Consulta www.example.invalid', 'Verifiqué SAT y emití la factura.', 'Este gasto es deducible.', 'Revisa DOC99', 'x'.repeat(MAX_LOCAL_AI_REPLY_CHARS + 1), ' ']) {
     assert.throws(() => safeLocalAssistantReply(reply, context), reply.slice(0, 80));
   }
+});
+
+test('a real fabricated movement listing is rejected even when it reuses known document amounts', () => {
+  const context = buildLocalAssistantContext(snapshot());
+  assert.equal(context.counts.transactions, 5);
+  const invented = context.references.slice(0, 6).map((reference, index) => `${index + 1}. Movimiento por $${reference.amount.toFixed(2)} ${reference.currency}, conciliado.`).join('\n');
+  assert.equal(invented.split('\n').length, 6);
+  assert.throws(() => safeLocalAssistantReply(`Hay seis movimientos:\n${invented}`, context));
+});
+
+test('qualitative replies cannot introduce currencies absent from the recorded context', () => {
+  const context = buildLocalAssistantContext(snapshot());
+  for (const reply of ['Revisa los movimientos en USD.', 'La moneda EUR necesita revisión.', 'Revisa los comprobantes en ZAR.', 'Las operaciones en dólares requieren revisión.', 'Los comprobantes en euros están pendientes.']) assert.throws(() => safeLocalAssistantReply(reply, context), reply);
+  assert.equal(safeLocalAssistantReply('La moneda MXN se revisa por separado. Un XML puede ayudar a comparar una operación.', context), 'La moneda MXN se revisa por separado. Un XML puede ayudar a comparar una operación.');
+  assert.equal(safeLocalAssistantReply('Si ves un movimiento ambiguo, revisa el comprobante y una operación bancaria.', context), 'Si ves un movimiento ambiguo, revisa el comprobante y una operación bancaria.');
 });
 
 test('same-owner documents outside the fiscal profile are excluded and unsafe numeric records fail closed', () => {

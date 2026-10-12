@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Send, Bot, User } from 'lucide-react';
 import { CashFlowMetrics, BankTransaction, CfdiRecord, Profile } from '../lib/types';
 import type { MLCEngineInterface } from '@mlc-ai/web-llm';
-import { buildLocalAssistantContext, isFiscalDecisionQuestion, localAssistantMessages, safeLocalAssistantReply,
+import { buildLocalAssistantContext, isFiscalDecisionQuestion, isRecordedDataQuestion, isLocalAiUserCancellation, localAssistantMessages, safeLocalAssistantReply,
   localAiSetupDiagnostic, LocalAiSetupError, withLocalAiDeadline as bounded,
   LOCAL_AI_MODEL_ID, LOCAL_AI_DOWNLOAD_MB, LOCAL_AI_GPU_MB, LOCAL_AI_FISCAL_LIMIT, MAX_LOCAL_AI_QUESTION_CHARS } from '../lib/localAssistant';
 import type {LocalAiSetupPhase} from '../lib/localAssistant';
@@ -14,6 +14,7 @@ interface Message {
   sender: 'user' | 'assistant';
   text: string;
   localAi?: boolean;
+  rules?: boolean;
 }
 
 interface AssistantChatProps {
@@ -110,6 +111,19 @@ const AssistantSession: React.FC<AssistantChatProps> = ({ mode, profile, metrics
     destroyLocalEngine(); loadingRef.current = false; setAiState('rules'); setProgress(0);
   }
 
+  async function answerWithRules(message: string, signal: AbortSignal): Promise<string> {
+    const response = await fetch('/api/assistant', {
+      method: 'POST', signal, headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({message, mode,
+        ...(mode === 'demo' ? {snapshot: {profile, transactions, cfdis: cfdis.map(record => ({...record, rawXml: undefined}))}} : {}),
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(typeof data.error === 'string' ? data.error : 'No se pudo consultar el asistente.');
+    if (typeof data.reply !== 'string' || !data.reply) throw new Error('El asistente devolvió una respuesta vacía.');
+    return data.reply;
+  }
+
   useEffect(() => {
     if (chatBodyRef.current) {
       chatBodyRef.current.scrollTop = chatBodyRef.current.scrollHeight;
@@ -132,10 +146,11 @@ const AssistantSession: React.FC<AssistantChatProps> = ({ mode, profile, metrics
     setIsTyping(true);
     const controller = new AbortController();
     controllerRef.current = controller;
-    const timeout = setTimeout(() => controller.abort(), aiState === 'ready' ? 100_000 : 30_000);
+    const useLocal = aiState === 'ready' && engineRef.current && context && !isRecordedDataQuestion(text);
+    const timeout = setTimeout(() => controller.abort(new LocalAiSetupError('timeout')), useLocal ? 100_000 : 30_000);
 
     try {
-      if (aiState === 'ready' && engineRef.current && context) {
+      if (useLocal && engineRef.current && context) {
         let reply: string;
         let localAi = false;
         if (isFiscalDecisionQuestion(text)) reply = LOCAL_AI_FISCAL_LIMIT;
@@ -147,42 +162,46 @@ const AssistantSession: React.FC<AssistantChatProps> = ({ mode, profile, metrics
           reply = safeLocalAssistantReply(generated.choices[0]?.message.content ?? '', context);
           localAi = true;
         }
-        if (mountedRef.current && !controller.signal.aborted) setMessages(previous => [...previous, {id: `a-${crypto.randomUUID()}`, sender: 'assistant', text: reply, localAi}]);
+        if (mountedRef.current && !controller.signal.aborted) setMessages(previous => [...previous, {id: `a-${crypto.randomUUID()}`, sender: 'assistant', text: reply, localAi, rules: !localAi}]);
         return;
       }
-      const res = await fetch('/api/assistant', {
-        method: 'POST',
-        signal: controller.signal,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: text,
-          mode,
-          ...(mode === 'demo' ? { snapshot: { profile, transactions, cfdis: cfdis.map(record => ({ ...record, rawXml: undefined })) } } : {})
-        })
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : 'No se pudo consultar el asistente.');
-      if (typeof data.reply !== 'string' || !data.reply) throw new Error('El asistente devolvió una respuesta vacía.');
+      const reply = await answerWithRules(text, controller.signal);
 
       if (mountedRef.current && !controller.signal.aborted) setMessages((prev) => [
         ...prev,
         {
           id: `a-${crypto.randomUUID()}`,
           sender: 'assistant',
-          text: data.reply
+          text: reply, rules: true,
         }
       ]);
     } catch (error) {
       if (!mountedRef.current) return;
-      const wasLocal = aiState === 'ready';
-      if (wasLocal) switchToRules();
+      const wasLocal = !!useLocal;
+      const wasCancelled = isLocalAiUserCancellation(controller.signal);
+      if (wasLocal) {
+        switchToRules();
+        if (!wasCancelled) {
+          const fallback = new AbortController();
+          controllerRef.current = fallback;
+          const deadline = setTimeout(() => fallback.abort(), 30_000);
+          try {
+            const reply = await answerWithRules(text, fallback.signal);
+            if (mountedRef.current && !fallback.signal.aborted) setMessages(previous => [...previous, {
+              id: `a-${crypto.randomUUID()}`, sender: 'assistant', rules: true,
+              text: `La respuesta local se descartó. Este resumen se calculó con reglas.\n\n${reply}`,
+            }]);
+            return;
+          } catch { /* Keep a controlled notice if the rules request also fails. */ }
+          finally {clearTimeout(deadline); if (controllerRef.current === fallback) controllerRef.current = null;}
+        }
+      }
       setMessages((prev) => [
         ...prev,
         {
           id: `a-${crypto.randomUUID()}`,
           sender: 'assistant',
-          text: wasLocal ? 'La IA local se interrumpió o su respuesta no pasó las comprobaciones. Consulta las cifras calculadas; puedes volver a preguntar con reglas.' : controller.signal.aborted ? 'La consulta se interrumpió o tardó demasiado. Intenta nuevamente.' : error instanceof Error ? error.message : 'No se pudo consultar el asistente. Intenta nuevamente.'
+          text: wasLocal ? wasCancelled ? 'La respuesta local se canceló. Puedes seguir usando reglas.' : 'No se pudo completar el resumen. Consulta las cifras calculadas o vuelve a intentarlo.' : controller.signal.aborted ? 'La consulta se interrumpió o tardó demasiado. Intenta nuevamente.' : error instanceof Error ? error.message : 'No se pudo consultar el asistente. Intenta nuevamente.'
         }
       ]);
     } finally {
@@ -224,7 +243,7 @@ const AssistantSession: React.FC<AssistantChatProps> = ({ mode, profile, metrics
       </div>
 
       <div className="px-5 py-3 border-b border-[oklch(0.30_0.03_260)] text-xs space-y-2">
-        <p>IA local opcional: descarga aproximada de {LOCAL_AI_DOWNLOAD_MB} MB desde Hugging Face y MLC; requiere WebGPU y aproximadamente {LOCAL_AI_GPU_MB} MB de memoria GPU. Tus preguntas y resumen se procesan en este dispositivo, sin enviarse a un proveedor de IA.</p>
+        <p>IA local opcional: descarga aproximada de {LOCAL_AI_DOWNLOAD_MB} MB desde Hugging Face y MLC; requiere WebGPU y aproximadamente {LOCAL_AI_GPU_MB} MB de memoria GPU. Las explicaciones de la IA se generan en este dispositivo; las preguntas no se envían a un proveedor de IA.</p>
         <div className="flex flex-wrap gap-2">
           {aiState === 'rules' && <button type="button" disabled={isTyping || !context} onClick={() => void activateLocalAi()} className="rounded-lg border border-[oklch(0.78_0.15_195)] px-3 py-1.5 disabled:opacity-50">Activar IA local (descarga modelo)</button>}
           {aiState !== 'rules' && <button type="button" onClick={switchToRules} className="rounded-lg border border-[oklch(0.40_0.03_260)] px-3 py-1.5">{aiState === 'loading' ? 'Cancelar descarga y usar reglas' : 'Desactivar IA y usar reglas'}</button>}
@@ -232,7 +251,7 @@ const AssistantSession: React.FC<AssistantChatProps> = ({ mode, profile, metrics
         </div>
         {aiState === 'loading' && <div role="status"><progress max={100} value={progress} aria-label="Preparación de IA local" className="w-full" /><span>Preparación: {progress}%. La primera carga puede tardar varios minutos.</span></div>}
         {(aiError || computed.error) && <p role="alert" className="text-amber-300">{aiError || computed.error}</p>}
-        <p className="text-amber-200">La IA puede contener errores. Los importes calculados abajo son independientes del modelo; no sustituyen una revisión fiscal.</p>
+        <p className="text-amber-200">La IA explica cómo revisar los estados y puede contener errores. Los resúmenes, cifras y referencias se calculan con reglas. Las decisiones fiscales requieren revisión contable.</p>
       </div>
       {context && <details className="px-5 py-2 border-b border-[oklch(0.30_0.03_260)] text-xs max-h-44 overflow-y-auto" open>
         <summary className="cursor-pointer font-semibold">Resumen calculado: {context.counts.matched} conciliados, {context.counts.ambiguous} ambiguos, {context.counts.unlinked} en discrepancia</summary>
@@ -270,6 +289,7 @@ const AssistantSession: React.FC<AssistantChatProps> = ({ mode, profile, metrics
               }`}
             >
               {m.localAi && <p className="text-[10px] text-amber-200 mb-1">Generado por IA local experimental</p>}
+              {m.rules && <p className="text-[10px] text-teal-200 mb-1">Resumen calculado con reglas</p>}
               <div className="whitespace-pre-wrap break-words">{m.text.split(/(\*\*[^*]+\*\*)/g).map((part, index) => part.startsWith('**') && part.endsWith('**') ? <strong key={index}>{part.slice(2, -2)}</strong> : <React.Fragment key={index}>{part}</React.Fragment>)}</div>
             </div>
           </div>
