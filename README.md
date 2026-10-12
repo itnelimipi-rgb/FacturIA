@@ -133,12 +133,13 @@ leyeron fixtures sintéticos y hubo **14 comprobaciones HTTP locales** con
 PostgreSQL, descarga privada y respuesta SAT N602. La recuperación completa
 local coincidió en 11 tablas e incluyó el PDF original; también pasó una
 comprobación breve de carga en el clon. CI aprobó y el incremento está desplegado
-en staging, con **34 comprobaciones HTTPS**, incluida persistencia después de
+en staging, con **43 comprobaciones HTTPS**, incluida persistencia después de
 reiniciar web. PDF/OCR, login, consulta SAT y revisión móvil se probaron en la
 interfaz. WebLLM cargó y generó texto en el navegador. La revisión encontró un
 resumen inventado: por ello el modelo quedó limitado a explicaciones cualitativas,
-con prueba de regresión y respuestas de cifras por reglas. La comprobación visual
-de esta corrección se registra al desplegarla en [staging](docs/STAGING.md).
+con pruebas de regresión y respuestas de cifras por reglas. Las guías de revisión
+tienen una respuesta determinista útil. La interfaz confirmó esa guía sin IA y
+el resumen calculado con IA activa. La evidencia está en [staging](docs/STAGING.md).
 El checkpoint anterior tuvo **36 comprobaciones HTTPS** de sus flujos y
 restauración JSON; se conserva su evidencia en el estado del sprint.
 

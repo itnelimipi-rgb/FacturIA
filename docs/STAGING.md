@@ -12,8 +12,16 @@ También hay PostgreSQL local aislado para desarrollar sin depender de staging.
 Se añadió ayuda funcional por reglas para revisar candidatos, explicar estados e
 importar XML/CSV/PDF/imágenes, con preguntas mixtas y fiscales protegidas. La IA
 recibe una guía de esos procedimientos y se rechaza la explicación circular que
-se observó en la prueba real. La suite ampliada pasa 281 pruebas; el siguiente
-despliegue de esta ayuda aún debe confirmarse.
+se observó en la prueba real. La suite ampliada pasó 281 pruebas, lint, tipos y build.
+El código `7c3fb8eba0a21cf806e8412f34fa2444c648bf61` pasó
+[CI](https://github.com/itnelimipi-rgb/FacturIA/actions/runs/38220560236) y está
+fijado al deployment `93a418c7-e6d1-4790-b979-ae0ab78a3f04`: **SUCCESS**.
+Nueve comprobaciones HTTPS de esta versión pasaron: cinco del asistente y cuatro
+de cuentas anteriores. Son 43 acumuladas en el incremento actual. La interfaz
+mostró la guía sin IA y el resumen 3/1/1 por reglas con el modelo activo. Una
+explicación local rechazada recuperó la guía automáticamente; cancelar detuvo
+el modelo y volvió a reglas sin iniciar otra respuesta. WebLLM continúa
+experimental y falta ampliar pruebas de calidad y compatibilidad.
 
 El checkpoint `98b135f` pasó CI y Railway confirmó SUCCESS del deployment
 `8136e018-7442-4b58-bd51-d4522b453d6c`. Cuatro comprobaciones HTTPS de
@@ -36,8 +44,8 @@ anteriores pasaron: 34 acumuladas en este incremento. La interfaz confirmó IA
 activa con resumen 3/1/1 por reglas y límite fiscal sin impuesto inventado.
 Una respuesta local rechazada recuperó las reglas automáticamente. La explicación
 del modelo sobre un movimiento ambiguo resultó circular; se añadió una guía real
-al prompt y ayuda determinista para los mismos procedimientos. Esta mejora está
-en validación antes del siguiente despliegue.
+al prompt y ayuda determinista para los mismos procedimientos. Esta mejora quedó
+desplegada en `7c3fb8e`, con la evidencia registrada arriba.
 Consumo comprobado de recursos del workspace: USD 6.43, límite duro USD 10 activo.
 
 ## Evidencia del incremento del 11 de octubre

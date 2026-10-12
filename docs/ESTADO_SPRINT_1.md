@@ -17,8 +17,19 @@ documental de la vigencia o deducibilidad. Incluye el caso de un CFDI disputado 
 varios movimientos. Las preguntas mixtas y fiscales conservan la ruta protegida.
 El modelo recibe la misma información de ayuda, sin datos cuantitativos privados;
 la explicación circular observada queda rechazada por una prueba de regresión.
-La suite ampliada pasa 281 pruebas. CI, despliegue y revisión visual de esta guía
-se registrarán al terminar su validación.
+La suite ampliada pasó **281 pruebas**, lint, TypeScript y build. Código publicado
+como `7c3fb8eba0a21cf806e8412f34fa2444c648bf61`, con
+[CI aprobado](https://github.com/itnelimipi-rgb/FacturIA/actions/runs/38220560236).
+Railway confirmó SUCCESS del deployment `93a418c7-e6d1-4790-b979-ae0ab78a3f04`,
+fijado a ese SHA sólo en staging. Pasaron cinco comprobaciones HTTPS de ayuda,
+resumen, egresos, límite fiscal y pregunta mixta, y cuatro de persistencia,
+aislamiento y logout. Son **43 comprobaciones HTTPS acumuladas** del incremento:
+34 previas y nueve en esta versión.
+La interfaz mostró la guía útil sin IA y el resumen 3/1/1 por reglas con IA activa.
+La explicación local rechazada recuperó automáticamente la guía por reglas. La
+cancelación explícita detuvo el modelo y volvió a reglas sin iniciar otra respuesta.
+El modelo pequeño sigue experimental; esta prueba no garantiza calidad lingüística
+ni compatibilidad en otros dispositivos.
 
 ### Corrección del asistente — 12 de octubre
 
@@ -50,7 +61,8 @@ reglas; la pregunta de ISR devolvió el límite fiscal sin cálculo inventado. T
 se observó recuperación automática a reglas tras rechazar una respuesta local.
 La explicación del modelo sobre un movimiento ambiguo resultó circular: se añadió
 una guía basada en el flujo real de la app al contexto del modelo y ayuda equivalente
-por reglas, con regresión del texto observado. Esa mejora está en validación.
+por reglas, con regresión del texto observado. Esa mejora quedó publicada y
+verificada en `7c3fb8e`, como se registra arriba.
 Las evidencias históricas siguientes conservan su fecha y alcance.
 
 - PDF.js lee PDF y Tesseract.js realiza OCR en español en el navegador. Workers,
