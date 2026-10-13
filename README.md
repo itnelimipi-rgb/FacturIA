@@ -17,9 +17,9 @@ y [espacio personal](https://web-staging-b090.up.railway.app/workspace).
 
 ## Funciones implementadas
 
-El incremento del **11 de octubre de 2026** está implementado en código; su
-validación completa y deployment se registrarán cuando terminen. Las pruebas
-del checkpoint anterior se distinguen al final de este documento.
+El incremento documental del **12 de octubre de 2026** está publicado y probado
+en staging. Los resultados actuales y los checkpoints anteriores se distinguen
+al final de este documento.
 
 - Importación XML CFDI 3.3/4.0: estructura, namespace, UUID, RFC, fechas, importes,
   descuentos e impuestos. Revalidación en servidor para el espacio persistente.
@@ -75,16 +75,17 @@ de esos formatos.
 ## Pendiente
 
 Validación de sellos/XSD/timbre, emisión y timbrado mediante PAC, reglas fiscales
-revisadas, complementos, impuestos locales, bancos y WhatsApp. No hay descarga
+revisadas, otros complementos e impuestos de Pagos 2.0, conciliación bancaria de
+parcialidades, impuestos locales, bancos y WhatsApp. No hay descarga
 masiva de CFDI ni lista EFOS completa sincronizada. La consulta implementada
 informa únicamente lo que devuelve SAT para el comprobante seleccionado.
 Conciliar no demuestra autenticidad ni deducibilidad. No se calculan ahorros
 fiscales ni se capturan credenciales CIEC/CSD.
 
-Falta activar y probar correo con una cuenta y remitente autorizados, revisar
-visualmente todos los flujos, probar WebGPU/inferencia real en los dispositivos
-objetivo, medir carga y registrar un ensayo completo de recuperación PostgreSQL.
-Los resultados de validación del incremento se documentarán al concluirlos.
+Falta activar y probar correo con una cuenta y remitente autorizados, ampliar
+la revisión visual a todos los flujos y dispositivos objetivo, probar WebGPU
+en esos dispositivos y ampliar pruebas de carga y recuperación de staging.
+El ensayo de recuperación PostgreSQL local ya está registrado en el estado del sprint.
 
 ## Desarrollo local
 
@@ -135,7 +136,12 @@ misma suite. Los fixtures son sintéticos y no tienen validez fiscal.
 El incremento documental del 12 de octubre pasó **373 pruebas**, lint, TypeScript
 y build, con auditoría npm completa sin vulnerabilidades conocidas. Cubre Pagos
 2.0, relaciones, separación I/E/P, CSV de comprobantes y restauración canónica.
-La publicación y verificación del despliegue se registran en el estado del sprint.
+Publicado como `561566c`, con CI aprobado y deployment confirmado SUCCESS en
+staging. Pasaron **22 comprobaciones HTTPS adicionales**, incluidas persistencia
+tras reiniciar web y compatibilidad de las cuentas anteriores. La interfaz
+confirmó relaciones, saldos declarados, separación I/E/P y descarga real del CSV.
+La demo volvió a sus seis comprobantes y cinco movimientos iniciales después
+de las pruebas. La evidencia está en [staging](docs/STAGING.md).
 La evidencia siguiente corresponde al checkpoint previo:
 
 El incremento del 11 de octubre y sus mejoras del asistente pasaron **281 pruebas**, lint, TypeScript y build, con
@@ -154,7 +160,7 @@ el resumen calculado con IA activa. La evidencia está en [staging](docs/STAGING
 El checkpoint anterior tuvo **36 comprobaciones HTTPS** de sus flujos y
 restauración JSON; se conserva su evidencia en el estado del sprint.
 
-Dominio/remitente y correo real quedan pospuestos por indicación del usuario.
+Dominio/remitente, correo real y WhatsApp quedan pospuestos por indicación del usuario.
 El proveedor de correo permanece desactivado.
 
 Leer [estado del sprint](docs/ESTADO_SPRINT_1.md), [plan de avance](docs/PLAN_AVANCE.md),

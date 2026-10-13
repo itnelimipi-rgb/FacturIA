@@ -112,6 +112,9 @@ reglas revisadas. No almacenar CIEC/CSD hasta definir su flujo y gestión de cla
 
 ## Etapa 5 — WhatsApp y preparación de producción
 
+Correo, dominio/remitente y WhatsApp están pospuestos por instrucción del usuario;
+continuar primero con los pendientes que no dependan de estas integraciones.
+
 - Cuenta y número Meta/WhatsApp Business, webhooks verificados y usuarios
   vinculados a cuentas autenticadas. Nunca inferir identidad sólo por texto.
 - Verificación de correo y recuperación de contraseña implementadas, pendientes
@@ -139,10 +142,10 @@ reglas revisadas. No almacenar CIEC/CSD hasta definir su flujo y gestión de cla
 5. Aprobación del usuario para la promoción. Un despliegue de pruebas no autoriza
    cambios en producción ni en el dominio personal.
 
-El checkpoint anterior aprobó 193 pruebas locales y 36 comprobaciones HTTP
-externas. El incremento del 11 de octubre requiere sus propias evidencias de
-check, CI, despliegue y pruebas; consultar `docs/ESTADO_SPRINT_1.md` para evitar
-atribuir los resultados anteriores a la versión nueva.
+El incremento documental del 12 de octubre aprobó 373 pruebas, lint, tipos, build
+y CI, con 22 comprobaciones HTTPS propias y revisión de interfaz en staging.
+Consultar `docs/ESTADO_SPRINT_1.md` para distinguir estas evidencias de las
+pruebas y ensayos de recuperación de los checkpoints anteriores.
 
 ## Coordinación con Claude Code
 

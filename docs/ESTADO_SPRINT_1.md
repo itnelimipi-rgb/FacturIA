@@ -34,7 +34,23 @@ listas acotadas y remite al original para revisar el resto.
 Validación local: **373 pruebas**, lint, TypeScript y build aprobados; auditoría
 npm completa con cero vulnerabilidades conocidas. Las pruebas incluyen JSONB,
 restauración desde XML, entradas malformadas y ausencia de movimientos o vínculos
-bancarios creados por E/P. CI y pruebas del despliegue se registrarán al completarse.
+bancarios creados por E/P. Publicado como
+`561566cc8f71de6d46546fd9d8a601910f78cab0`, con
+[CI aprobado](https://github.com/itnelimipi-rgb/FacturIA/actions/runs/38338464649).
+Railway confirmó SUCCESS del deployment `568ff73d-a31f-4ef1-a88a-adfac19fa25a`,
+fijado a ese SHA sólo en staging; su suspensión automática posterior es esperada.
+Pasaron **22 comprobaciones HTTPS de este incremento**: 14 del flujo documental
+con dos cuentas nuevas, cuatro después de reiniciar web y cuatro con cuentas
+anteriores. Incluyen originales, aislamiento, metadatos, restauración canónica,
+idempotencia y ausencia de conciliación automática de E/P. PostgreSQL no se reinició.
+La interfaz mostró pago de 58 MXN separado del total XML cero/XXX, parcialidad
+y saldos declarados, referencias propias y notas E separadas en el panel.
+La descarga real del CSV conservó los nueve comprobantes sintéticos de la prueba.
+La demo se restableció después a sus seis comprobantes y cinco movimientos,
+con tres conciliados y neto bancario 14,490 MXN. No se amplió infraestructura.
+Correos, dominio/remitente y WhatsApp permanecen pospuestos por el usuario.
+Consumo total del workspace comprobado a las 21:36 del 12 de octubre (Ciudad
+de México): USD 6.60, con límite duro USD 10 activo y sin excederlo.
 
 ### Guías de revisión — 12 de octubre
 

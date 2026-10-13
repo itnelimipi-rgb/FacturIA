@@ -7,6 +7,39 @@ Railway Agent e impuestos tienen tratamiento independiente: no ejecutar Agent
 ni contratar integraciones adicionales sin revisar el presupuesto.
 También hay PostgreSQL local aislado para desarrollar sin depender de staging.
 
+## Documentos relacionados y Pagos 2.0 — 12 de octubre
+
+Publicado en `sprint-1` como `561566cc8f71de6d46546fd9d8a601910f78cab0`, con
+[CI aprobado](https://github.com/itnelimipi-rgb/FacturIA/actions/runs/38338464649).
+Pasaron 373 pruebas, lint, tipos y build; auditoría npm completa sin vulnerabilidades.
+Lectura de relaciones, método PUE/PPD y pagos/parcialidades declaradas. El detalle
+separa XML P cero/XXX del monto pagado; panel separa I y E, y CSV de comprobantes
+conserva esas columnas. Respaldos revalidan el XML al restaurar los metadatos.
+No requiere una migración SQL, proveedor externo ni nuevos servicios.
+Se mantienen conciliación automática exclusivamente I y saldos entre distintas
+MonedaDR como datos declarados, sin validar su conversión. No acredita XSD completo,
+sellos, impuestos del complemento ni emisión de CFDI.
+Deployment `568ff73d-a31f-4ef1-a88a-adfac19fa25a`: **SUCCESS**, fijado al SHA
+publicado. La suspensión automática posterior (`SLEEPING`) conserva ese deployment.
+Pasaron **22 comprobaciones HTTPS de este incremento**: 14 con dos cuentas
+sintéticas nuevas, cuatro de persistencia tras reiniciar sólo web y cuatro con
+cuentas anteriores. Se verificaron importación I/E/P, XML originales, metadatos,
+aislamiento, restauración desde XML, idempotencia y conciliación sólo de I.
+PostgreSQL no se reinició.
+
+La revisión de interfaz confirmó total P cero/XXX separado de 58 MXN de pago,
+parcialidad 1 y saldos declarados 116/58/58, así como referencias al documento I
+de la misma cuenta. La nota E mostró sus UUID relacionados y el panel mantuvo
+importes bancarios separados. La descarga real de CSV conservó nueve registros
+de prueba y columnas distintas para total XML y monto del pago.
+Tras revisar los tres XML sintéticos añadidos, se restableció la demo: seis
+comprobantes, cinco movimientos, tres conciliados y neto bancario 14,490 MXN.
+Estos resultados no equivalen a una revisión de todos los dispositivos.
+Correos, dominio/remitente y WhatsApp siguen pospuestos por instrucción del usuario.
+Consumo de recursos de todo el workspace comprobado el 12 de octubre a las
+21:36 (Ciudad de México): **USD 6.60**. Límite duro **USD 10** activo,
+`isOverLimit: false`; no se contrataron proveedores ni se añadieron servicios.
+
 ## Corrección del asistente — 12 de octubre
 
 Se añadió ayuda funcional por reglas para revisar candidatos, explicar estados e
