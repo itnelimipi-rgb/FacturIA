@@ -1,6 +1,6 @@
 # Plan de avance de FacturIA
 
-Actualizado: 11 de octubre de 2026. Rama de trabajo y pruebas: `sprint-1`.
+Actualizado: 12 de octubre de 2026. Rama de trabajo y pruebas: `sprint-1`.
 La rama continuará separada de `main` hasta autorización explícita del usuario.
 Priorizar herramientas open source y APIs gratuitas; conservar el límite duro
 de USD 10 de recursos para el conjunto del workspace Railway.
@@ -95,8 +95,15 @@ en navegador ni acredita calidad de la respuesta de IA.
   ofrecer timbrado. La consulta de estado no sustituye estas verificaciones.
 - Reglas fiscales versionadas por régimen, periodo, moneda y tipo de
   comprobante, contrastadas con fuentes oficiales y revisión contable.
-- Ampliar tipos y complementos CFDI: P/pagos parciales, notas de crédito,
-  impuestos locales, nómina y conversión de monedas según especificaciones.
+- Lectura documental de notas de crédito E con UUID relacionados, PUE/PPD y
+  Pagos 2.0 en CFDI 4.0 implementada el 12 de octubre: pagos, parcialidades,
+  saldos y monedas declaradas, cálculo exacto de saldos y total de pagos MXN.
+  El panel separa I/E/P; el CSV de comprobantes conserva esa distinción.
+  Respaldos preservan metadatos y restauración vuelve a interpretar el XML.
+  Pendiente: conciliación de parcialidades bancarias, impuestos del complemento,
+  pagos 1.0 históricos, impuestos locales, nómina y conversión de MonedaDR.
+  E/P siguen fuera de la conciliación automática; EquivalenciaDR se conserva
+  como dato declarado y no determina el saldo global de una factura.
 - Elegir proveedor bancario; sandbox primero, conciliación idempotente,
   webhooks firmados, reintentos y consentimiento de acceso.
 

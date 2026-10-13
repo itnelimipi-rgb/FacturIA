@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { BankTransaction, CfdiRecord, ReconciliationStatus } from '../lib/types';
+import { documentTypeLabel, formatDeclaredAmount } from '../lib/documentSummary';
 import {
   CheckCircle2,
   HelpCircle,
@@ -361,7 +362,11 @@ export const TreasuryInbox: React.FC<TreasuryInboxProps> = ({
               <span className="min-w-0 flex-1 space-y-1">
                 <span className="block text-xs font-semibold text-white truncate">{record.nombreEmisor || record.rfcEmisor}</span>
                 <span className="block font-mono text-[11px] text-[oklch(0.68_0.03_250)] break-all">{record.uuidSat || 'Gasto provisional · sin UUID fiscal'}</span>
-                <span className="block text-xs text-white">{formatCurrency(record.total, record.currency || 'MXN')}</span>
+                <span className="block text-[11px] text-[oklch(0.78_0.15_195)]">{documentTypeLabel(record)}</span>
+                {record.tipoComprobante === 'P' ? <><span className="block text-xs text-white break-words">{record.paymentComplement ? `MontoTotalPagos declarado: ${formatDeclaredAmount(record.paymentComplement.totalPaymentsMxn, 'MXN')}` : 'Monto del pago: consulta el complemento en el XML'}</span><span className="block text-[10px] text-[oklch(0.68_0.03_250)]">Total del comprobante P: {formatCurrency(record.total, record.currency || 'XXX')}; no es un movimiento bancario.</span></> : <span className="block text-xs text-white break-words">Total declarado: {formatCurrency(record.total, record.currency || 'MXN')}</span>}
+                {record.metodoPago && <span className="block text-[10px] text-[oklch(0.68_0.03_250)]">Método de pago declarado: {record.metodoPago}</span>}
+                {record.relatedCfdis?.length ? <span className="block text-[10px] text-[oklch(0.68_0.03_250)]">Incluye UUID relacionados declarados; consulta el detalle.</span> : null}
+                {(record.tipoComprobante === 'E' || record.tipoComprobante === 'P') && <span className="block text-[10px] text-[oklch(0.68_0.03_250)]">Referencia documental; no se concilia automáticamente.</span>}
                 <span className={`block text-[10px] ${record.statusSat === 'cancelado' ? 'text-rose-300' : 'text-amber-300'}`}>{record.sourceType === 'manual' ? 'Registro manual pendiente de CFDI' : record.statusSat === 'no_verificado' ? 'Vigencia SAT sin verificar' : record.statusSat === 'cancelado' ? 'Marcado como cancelado' : 'Marcado como vigente'}</span>
               </span>
               <ExternalLink className="w-3 h-3 text-[oklch(0.68_0.03_250)] shrink-0 mt-1" />

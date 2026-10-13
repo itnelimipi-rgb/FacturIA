@@ -3,6 +3,7 @@
 import React from 'react';
 import { BankTransaction, CashFlowMetrics, CfdiRecord } from '../lib/types';
 import { DollarSign, Briefcase, Lightbulb, FileCheck2 } from 'lucide-react';
+import { summarizeXmlDocuments } from '../lib/documentSummary';
 
 interface FiscalDashboardPanelProps {
   metrics: CashFlowMetrics;
@@ -27,14 +28,13 @@ export const FiscalDashboardPanel: React.FC<FiscalDashboardPanelProps> = ({ metr
   const strokeDashoffset = 352 - 352 * pct / 100;
   const manualCount = cfdis.filter(record => record.sourceType === 'manual').length;
   const unverifiedCount = cfdis.filter(record => record.statusSat === 'no_verificado').length;
-  const xmlRecords = cfdis.filter(record => record.sourceType === 'xml' && record.statusSat !== 'cancelado' && record.uuidSat);
+  const documentarySummary = summarizeXmlDocuments(cfdis);
   const deposits = transactions
     ? groupAmounts(transactions.filter(transaction => transaction.amount > 0).map(transaction => ({ amount: transaction.amount, currency: transaction.currency })))
     : [['MXN', metrics.totalIncome] as [string, number]];
   const charges = transactions
     ? groupAmounts(transactions.filter(transaction => transaction.amount < 0).map(transaction => ({ amount: Math.abs(transaction.amount), currency: transaction.currency })))
     : [['MXN', metrics.totalExpense] as [string, number]];
-  const invoiceTotals = groupAmounts(xmlRecords.map(record => ({ amount: record.total, currency: record.currency })));
   const tips = [
     totalTransactions ? `${metrics.conciliadoCount} de ${totalTransactions} movimientos tienen un comprobante vinculado. Revisa las coincidencias antes de cerrar el periodo.` : 'Importa tu primer CSV bancario y un XML para comenzar la conciliación.',
     metrics.ambiguoCount ? `${metrics.ambiguoCount} movimiento(s) requieren que selecciones el comprobante correcto.` : 'No hay coincidencias ambiguas pendientes.',
@@ -67,8 +67,12 @@ export const FiscalDashboardPanel: React.FC<FiscalDashboardPanelProps> = ({ metr
         </div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {[{ title: 'Depósitos bancarios', totals: deposits, icon: DollarSign, detail: 'Suma de movimientos positivos importados' }, { title: 'Cargos bancarios', totals: charges, icon: Briefcase, detail: 'Suma de movimientos negativos importados' }, { title: 'Importe de comprobantes', totals: invoiceTotals, icon: FileCheck2, detail: 'XML registrados; excluye cancelados y gastos provisionales' }].map(card => <div key={card.title} className="bg-[oklch(0.21_0.025_260)] border border-[oklch(0.30_0.03_260)] rounded-2xl p-5 shadow-xs"><div className="flex items-center justify-between mb-2"><span className="text-xs font-semibold text-[oklch(0.68_0.03_250)]">{card.title}</span><div className="w-8 h-8 rounded-lg bg-[oklch(0.78_0.15_195/0.14)] text-[oklch(0.78_0.15_195)] flex items-center justify-center"><card.icon className="w-4 h-4" /></div></div><div className="font-mono text-xl font-bold text-white space-y-1">{card.totals.map(([currency, amount]) => <div key={currency}>{formatCurrency(amount, currency)}</div>)}</div><p className="text-xs text-[oklch(0.68_0.03_250)] mt-1">{card.detail}</p></div>)}
+        {[{ title: 'Depósitos bancarios', totals: deposits, icon: DollarSign, detail: 'Suma de movimientos positivos importados' }, { title: 'Cargos bancarios', totals: charges, icon: Briefcase, detail: 'Suma de movimientos negativos importados' }, { title: 'Total declarado en XML de ingreso (I)', totals: documentarySummary.invoiceTotals, icon: FileCheck2, detail: 'Por moneda; excluye cancelados, otros tipos y gastos provisionales. No representa cobros ni deducciones.' }].map(card => <div key={card.title} className="min-w-0 bg-[oklch(0.21_0.025_260)] border border-[oklch(0.30_0.03_260)] rounded-2xl p-5 shadow-xs"><div className="flex items-center justify-between gap-2 mb-2"><span className="text-xs font-semibold text-[oklch(0.68_0.03_250)]">{card.title}</span><div className="w-8 h-8 shrink-0 rounded-lg bg-[oklch(0.78_0.15_195/0.14)] text-[oklch(0.78_0.15_195)] flex items-center justify-center"><card.icon className="w-4 h-4" /></div></div><div className="font-mono text-xl font-bold text-white space-y-1 break-words">{card.totals.length ? card.totals.map(([currency, amount]) => <div key={currency}>{formatCurrency(amount, currency)}</div>) : <span className="text-sm">Sin XML de ingreso registrados</span>}</div><p className="text-xs text-[oklch(0.68_0.03_250)] mt-1">{card.detail}</p></div>)}
       </div>
+      {(documentarySummary.creditNoteCount > 0 || documentarySummary.paymentCount > 0) && <section className="rounded-2xl border border-[oklch(0.30_0.03_260)] bg-[oklch(0.21_0.025_260)] p-5 text-xs space-y-3">
+        {documentarySummary.creditNoteCount > 0 && <div><h2 className="font-sora font-semibold text-white">Notas de crédito / egreso (E) declaradas ({documentarySummary.creditNoteCount})</h2><div className="font-mono text-white mt-2 space-y-1">{documentarySummary.creditNoteTotals.map(([currency, amount]) => <p key={currency}>{formatCurrency(amount, currency)}</p>)}</div><p className="text-[oklch(0.68_0.03_250)] mt-1">Importes separados por moneda; no se restan automáticamente a los XML de ingreso ni a los movimientos bancarios.</p></div>}
+        {documentarySummary.paymentCount > 0 && <p className="text-[oklch(0.68_0.03_250)]">{documentarySummary.paymentCount} complemento(s) de pagos (P) registrado(s). Sus pagos y saldos declarados se consultan en el detalle; no agregan movimientos ni saldo bancario.</p>}
+      </section>}
     </div>
   );
 };

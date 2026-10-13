@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { beforeEach, after, test } from 'node:test';
+import { readFileSync } from 'node:fs';
 import { FacturiaStore, FacturiaStoreError } from '../src/lib/mockStore';
 import { MatchingEngineService } from '../src/lib/MatchingEngineService';
 import { SEED_PROFILE, SEED_CFDIS, SEED_TRANSACTIONS } from '../src/lib/seed';
 import { BankTransaction, CfdiRecord } from '../src/lib/types';
+import { XmlCfdiParser } from '../src/lib/xmlParser';
 
 class MemoryStorage implements Storage {
   data = new Map<string, string>();
@@ -166,4 +168,70 @@ test('reset restores the active seed profile and removes manual locks', () => {
   FacturiaStore.resetToSeed();
   assert.deepEqual(FacturiaStore.getProfile(), SEED_PROFILE);
   assert.deepEqual(FacturiaStore.getTransactions(), SEED_TRANSACTIONS);
+});
+
+function importedDocument(fixture: 'sample-payment20.xml' | 'sample-credit-note.xml'): CfdiRecord {
+  const rawXml = readFileSync(new URL(`./fixtures/${fixture}`, import.meta.url), 'utf8')
+    .replaceAll('XAXX010101000', SEED_PROFILE.rfc);
+  const parsed = XmlCfdiParser.parse(rawXml, SEED_PROFILE.id);
+  assert.ok(parsed.success && parsed.cfdi, `El XML sintético ${fixture} debe ser importable`);
+  return {...parsed.cfdi, id: `demo-${fixture}`, rawXml};
+}
+
+test('zero-total payment complements and credit notes survive demo reload without changing bank reconciliation or cash totals', () => {
+  FacturiaStore.resetToSeed();
+  const beforeTransactions = MatchingEngineService.evaluateBatch(FacturiaStore.getTransactions(), FacturiaStore.getCfdis(), FacturiaStore.getProfile());
+  const beforeMetrics = FacturiaStore.getMetrics();
+  const payment = importedDocument('sample-payment20.xml');
+  const credit = importedDocument('sample-credit-note.xml');
+  assert.equal(payment.tipoComprobante, 'P');
+  assert.equal(payment.total, 0);
+  assert.equal(payment.currency, 'XXX');
+  assert.ok(payment.paymentComplement?.payments.length);
+  assert.equal(credit.tipoComprobante, 'E');
+  assert.ok(credit.relatedCfdis?.length);
+  FacturiaStore.addCfdi(payment);
+  const result = FacturiaStore.addCfdi(credit);
+  assert.deepEqual(result.updatedTransactions, beforeTransactions);
+  assert.deepEqual(FacturiaStore.getMetrics(), beforeMetrics);
+  const reloaded = FacturiaStore.getCfdis();
+  assert.equal(reloaded.length, SEED_CFDIS.length + 2);
+  assert.deepEqual(reloaded.find(document => document.id === payment.id), JSON.parse(JSON.stringify(payment)));
+  assert.deepEqual(reloaded.find(document => document.id === credit.id), JSON.parse(JSON.stringify(credit)));
+  reloaded.find(document => document.id === payment.id)!.paymentComplement!.payments[0].relatedDocuments[0].paidAmount = '999';
+  assert.deepEqual(FacturiaStore.getCfdis().find(document => document.id === payment.id)!.paymentComplement, JSON.parse(JSON.stringify(payment.paymentComplement)));
+});
+
+test('new document metadata refuses forged values and foreign ownership before writing the demo cache', () => {
+  FacturiaStore.resetToSeed();
+  const before = storage.getItem(keys.cfdi);
+  const payment = importedDocument('sample-payment20.xml');
+  const credit = importedDocument('sample-credit-note.xml');
+  const invalid = [
+    {...credit, metodoPago: 'UNSUPPORTED'},
+    {...credit, relatedCfdis: [{type: '01', uuids: ['not-a-uuid']}]},
+    {...payment, paymentComplement: undefined},
+    {...payment, currency: 'MXN'},
+    {...payment, subtotal: 1},
+    {...payment, paymentComplement: {...payment.paymentComplement!, payments: [{...payment.paymentComplement!.payments[0], amount: 1.25}]}},
+  ];
+  for (const document of invalid) {
+    assert.throws(() => FacturiaStore.addCfdi(document as CfdiRecord), errorCode('INVALID_DATA'));
+    assert.equal(storage.getItem(keys.cfdi), before);
+  }
+  assert.throws(() => FacturiaStore.addCfdi({...payment, userId: 'foreign-owner'}), errorCode('FOREIGN_USER'));
+  assert.equal(storage.getItem(keys.cfdi), before);
+});
+
+test('zero values remain limited to documentary P/T records while historical demo records keep their cache', () => {
+  FacturiaStore.resetToSeed();
+  assert.deepEqual(FacturiaStore.getCfdis(), SEED_CFDIS);
+  const transfer = freshCfdi({tipoComprobante: 'T', total: 0, subtotal: 0, iva: 0, retenciones: 0, currency: 'XXX', conceptos: []});
+  FacturiaStore.addCfdi(transfer);
+  assert.equal(FacturiaStore.getCfdis()[0].id, transfer.id);
+  for (const overrides of [
+    {tipoComprobante: 'I' as const}, {tipoComprobante: 'E' as const}, {tipoComprobante: 'N' as const},
+    {currency: 'MXN'}, {subtotal: 1}, {iva: 1}, {retenciones: 1},
+  ]) assert.throws(() => FacturiaStore.addCfdi({...transfer, id: 'invalid-zero', ...overrides}), errorCode('INVALID_DATA'));
+  assert.equal(FacturiaStore.getCfdis().length, SEED_CFDIS.length + 1);
 });

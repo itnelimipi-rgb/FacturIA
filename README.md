@@ -51,6 +51,11 @@ del checkpoint anterior se distinguen al final de este documento.
 - Consulta SOAP al servicio oficial SAT para un XML propio: vigencia, resultado,
   fecha y EFOS cuando la respuesta lo proporciona. Un documento no encontrado o
   una falla del servicio conserva `no_verificado`; una consulta no valida sellos.
+- Notas de crédito y UUID relacionados, método PUE/PPD y lectura de Pagos 2.0
+  (CFDI 4.0), con parcialidades, saldos y monedas declarados. Facturas I y notas E
+  se muestran separadas; P tiene total XML cero/XXX y monto de pago independiente.
+  E/P no se concilian automáticamente ni crean movimientos. CSV de comprobantes
+  disponible; respaldo y restauración conservan metadatos con el XML original.
 - Verificación de correo y recuperación de contraseña implementadas, desactivadas
   mientras falta configurar entrega. Adaptadores Resend HTTPS y SMTP con TLS;
   cuota diaria global y límites por cuenta almacenados en PostgreSQL.
@@ -126,6 +131,12 @@ producción. Los scripts históricos de `tests/run_verification` delegan en la
 misma suite. Los fixtures son sintéticos y no tienen validez fiscal.
 
 ## Estado y próximo avance
+
+El incremento documental del 12 de octubre pasó **373 pruebas**, lint, TypeScript
+y build, con auditoría npm completa sin vulnerabilidades conocidas. Cubre Pagos
+2.0, relaciones, separación I/E/P, CSV de comprobantes y restauración canónica.
+La publicación y verificación del despliegue se registran en el estado del sprint.
+La evidencia siguiente corresponde al checkpoint previo:
 
 El incremento del 11 de octubre y sus mejoras del asistente pasaron **281 pruebas**, lint, TypeScript y build, con
 auditoría npm completa sin vulnerabilidades conocidas. Los motores PDF/OCR

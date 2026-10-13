@@ -43,6 +43,53 @@ export const satVerificationSchema = z.object({
   efos: z.enum(['listed', 'not_listed', 'unknown']),
   cancelability: z.string().max(100).optional(), cancellationStatus: z.string().max(100).optional(),
 });
+const uuid = z.string().regex(/^[\dA-F]{8}-[\dA-F]{4}-[\dA-F]{4}-[\dA-F]{4}-[\dA-F]{12}$/);
+const decimalAmount = z.string().max(17).regex(/^\d{1,10}(?:\.\d{1,6})?$/);
+const positiveDecimal = decimalAmount.refine(value => Number(value) > 0, 'El importe debe ser positivo');
+const paymentCurrency = z.string().regex(/^[A-Z]{3}$/).refine(value => value !== 'XXX', 'El pago requiere una moneda');
+const equivalence = z.string().max(21).regex(/^\d{1,10}(?:\.\d{1,10})?$/).refine(value => Number(value) > 0, 'La equivalencia debe ser positiva');
+const scaledDecimal = (value: string, digits: number) => {
+  const [whole, fraction = ''] = value.split('.');
+  return BigInt(whole) * 10n ** BigInt(digits) + BigInt(fraction.padEnd(digits, '0'));
+};
+const relatedPaymentDocumentSchema = z.object({
+  uuid, currency: paymentCurrency, equivalence: equivalence.optional(), installment: z.number().int().min(1).max(999),
+  previousBalance: decimalAmount, paidAmount: positiveDecimal, remainingBalance: decimalAmount,
+  taxObject: z.string().regex(/^\d{2}$/),
+}).superRefine((record, ctx) => {
+  if ([record.previousBalance, record.paidAmount, record.remainingBalance].some(value => !/^\d{1,10}(?:\.\d{1,6})?$/.test(value))) return;
+  if (scaledDecimal(record.previousBalance, 6) - scaledDecimal(record.paidAmount, 6) !== scaledDecimal(record.remainingBalance, 6)) {
+    ctx.addIssue({code: 'custom', message: 'Saldo anterior menos importe pagado debe coincidir con saldo insoluto'});
+  }
+});
+const paymentSchema = z.object({
+  date, currency: paymentCurrency, amount: positiveDecimal, form: z.string().regex(/^\d{2}$/),
+  exchangeRate: positiveDecimal.optional(), relatedDocuments: z.array(relatedPaymentDocumentSchema).min(1).max(1000),
+}).superRefine((payment, ctx) => {
+  if (payment.currency !== 'MXN' && !payment.exchangeRate) ctx.addIssue({code:'custom', message:'Falta el tipo de cambio declarado del pago'});
+  if (payment.currency === 'MXN' && payment.exchangeRate && Number(payment.exchangeRate) !== 1) ctx.addIssue({code:'custom', message:'El tipo de cambio MXN debe ser uno'});
+  const seen = new Set<string>();
+  for (const document of payment.relatedDocuments) {
+    if (seen.has(document.uuid)) ctx.addIssue({code:'custom', message:'UUID repetido dentro del mismo pago'});
+    seen.add(document.uuid);
+    if (document.currency !== payment.currency && !document.equivalence) ctx.addIssue({code:'custom', message:'Falta equivalencia entre monedas declaradas'});
+    if (document.currency === payment.currency && document.equivalence && Number(document.equivalence) !== 1) ctx.addIssue({code:'custom', message:'La equivalencia de la misma moneda debe ser uno'});
+  }
+  if (/^\d{1,10}(?:\.\d{1,6})?$/.test(payment.amount) && payment.relatedDocuments.every(record => /^\d{1,10}(?:\.\d{1,6})?$/.test(record.paidAmount))) {
+    const sameCurrencyPaid = payment.relatedDocuments.filter(record => record.currency === payment.currency).reduce((sum, record) => sum + scaledDecimal(record.paidAmount, 6), 0n);
+    if (sameCurrencyPaid > scaledDecimal(payment.amount, 6)) ctx.addIssue({code:'custom', message:'Los documentos en la moneda del pago superan el monto declarado'});
+  }
+});
+const paymentComplementSchema = z.object({
+  version: z.literal('2.0'), totalPaymentsMxn: z.string().max(13).regex(/^\d{1,10}(?:\.\d{1,2})?$/),
+  payments: z.array(paymentSchema).min(1).max(100),
+}).superRefine((complement, ctx) => {
+  if (complement.payments.reduce((count, payment) => count + payment.relatedDocuments.length, 0) > 1000) ctx.addIssue({code:'custom', message:'El complemento supera el límite de documentos relacionados'});
+  if (!/^\d{1,10}(?:\.\d{1,2})?$/.test(complement.totalPaymentsMxn) || complement.payments.some(payment => !/^\d{1,10}(?:\.\d{1,6})?$/.test(payment.amount) || (payment.exchangeRate !== undefined && !/^\d{1,10}(?:\.\d{1,6})?$/.test(payment.exchangeRate)))) return;
+  const sum = complement.payments.reduce((total, payment) => total + scaledDecimal(payment.amount, 6) * scaledDecimal(payment.exchangeRate ?? '1', 6), 0n);
+  const roundedCents = (sum + 5_000_000_000n) / 10_000_000_000n;
+  if (roundedCents !== scaledDecimal(complement.totalPaymentsMxn, 2)) ctx.addIssue({code:'custom', message:'El total de pagos MXN no coincide con los montos y tipos de cambio declarados'});
+});
 export const cfdiSchema = z.object({
   id: z.string().min(1).max(200), userId: z.string().min(1).max(200),
   uuidSat: z.string().max(200), rfcEmisor: rfcSchema, rfcReceptor: rfcSchema,
@@ -53,6 +100,9 @@ export const cfdiSchema = z.object({
   sourceType: z.enum(['xml', 'pdf', 'image', 'manual']).optional(),
   currency: z.string().regex(/^[A-Z]{3}$/).optional(), descuento: money.optional(),
   usoCfdi: z.string().max(5).optional(), formaPago: z.string().max(2).optional(),
+  metodoPago: z.enum(['PUE', 'PPD']).optional(),
+  relatedCfdis: z.array(z.object({type:z.string().regex(/^0[1-9]$/), uuids:z.array(uuid).min(1).max(1000)})).max(20).optional(),
+  paymentComplement: paymentComplementSchema.optional(),
   conceptos: z.array(conceptSchema).max(1000).optional(),
   rawXml: z.string().max(2_000_000).optional(),
   satVerification: satVerificationSchema.optional(),
@@ -61,6 +111,14 @@ export const cfdiSchema = z.object({
     bytes: z.number().int().min(1).max(5 * 1024 * 1024),
     sha256: z.string().regex(/^[\da-f]{64}$/), source: z.enum(['pdf', 'image']),
   }).optional(),
+}).superRefine((document, ctx) => {
+  if (document.relatedCfdis) {
+    if (document.relatedCfdis.reduce((count, relation) => count + relation.uuids.length, 0) > 1000) ctx.addIssue({code:'custom', message:'Demasiadas referencias documentales'});
+    for (const relation of document.relatedCfdis) if (new Set(relation.uuids).size !== relation.uuids.length || relation.uuids.includes(document.uuidSat.toUpperCase())) ctx.addIssue({code:'custom', message:'Referencias duplicadas o al mismo comprobante'});
+  }
+  if (document.tipoComprobante === 'P' && !document.paymentComplement) ctx.addIssue({code:'custom', message:'El CFDI de pago necesita su complemento Pagos 2.0'});
+  if (document.paymentComplement && (document.tipoComprobante !== 'P' || document.currency !== 'XXX' || document.total !== 0 || document.subtotal !== 0 || document.iva !== 0 || document.retenciones !== 0)) ctx.addIssue({code:'custom', message:'El complemento de pagos requiere CFDI P con total cero y moneda XXX'});
+  if (document.paymentComplement?.payments.some(payment => payment.relatedDocuments.some(record => record.uuid === document.uuidSat.toUpperCase()))) ctx.addIssue({code:'custom', message:'El pago no puede referirse a su propio UUID'});
 });
 export const snapshotSchema = z.object({
   profile: profileSchema, transactions: z.array(transactionSchema).max(WORKSPACE_TRANSACTION_LIMIT), cfdis: z.array(cfdiSchema).max(WORKSPACE_DOCUMENT_LIMIT),

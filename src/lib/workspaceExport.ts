@@ -102,3 +102,24 @@ export function serializeTransactionsCsv(snapshot: WorkspaceExportSnapshot): str
   }
   return enforceDownloadLimit(`\uFEFF${lines.join('\r\n')}\r\n`);
 }
+
+/** One row per document. P totals and declared payment totals have separate columns. */
+export function serializeDocumentsCsv(snapshot: WorkspaceExportSnapshot): string {
+  const safe = exportSnapshotSchema.parse(snapshot);
+  const headers = ['id', 'uuid_cfdi', 'tipo_cfdi', 'fecha_emision', 'rfc_emisor', 'rfc_receptor', 'emisor', 'receptor',
+    'moneda_cfdi', 'total_cfdi', 'subtotal', 'iva', 'retenciones', 'metodo_pago', 'forma_pago', 'estado_sat',
+    'consulta_sat_fecha', 'origen', 'relaciones_declaradas', 'total_pagos_declarado_mxn'];
+  const formatAmount = (value: number) => value.toFixed(6).replace(/(\.\d{2,}?)0+$/, '$1');
+  const lines = [headers.map(csvText).join(',')];
+  for (const record of safe.cfdis) {
+    lines.push([
+      csvText(record.id), csvText(record.uuidSat), csvText(record.tipoComprobante), csvText(record.fechaEmision),
+      csvText(record.rfcEmisor), csvText(record.rfcReceptor), csvText(record.nombreEmisor ?? ''), csvText(record.nombreReceptor ?? ''),
+      csvText(record.currency ?? 'MXN'), formatAmount(record.total), formatAmount(record.subtotal), formatAmount(record.iva), formatAmount(record.retenciones),
+      csvText(record.metodoPago ?? ''), csvText(record.formaPago ?? ''), csvText(record.statusSat), csvText(record.satVerification?.checkedAt ?? ''),
+      csvText(record.sourceType ?? ''), csvText((record.relatedCfdis ?? []).map(group => `${group.type}:${group.uuids.join('|')}`).join(';')),
+      record.paymentComplement?.totalPaymentsMxn ?? '',
+    ].join(','));
+  }
+  return enforceDownloadLimit(`\uFEFF${lines.join('\r\n')}\r\n`);
+}

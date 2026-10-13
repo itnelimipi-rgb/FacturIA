@@ -1,5 +1,5 @@
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
-import { CfdiRecord } from './types';
+import { CfdiPaymentComplement, CfdiRecord, CfdiRelation } from './types';
 
 export interface ParsedCfdiResult {
   success: boolean;
@@ -22,6 +22,7 @@ type Namespaces = Record<string, string>;
 type Element = { name: string; node: XmlNode; namespaces: Namespaces };
 
 const TFD_NAMESPACE = 'http://www.sat.gob.mx/TimbreFiscalDigital';
+const PAYMENTS_NAMESPACE = 'http://www.sat.gob.mx/Pagos20';
 const RFC_PATTERN = /^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$/;
 const UUID_PATTERN = /^[\dA-F]{8}-[\dA-F]{4}-[\dA-F]{4}-[\dA-F]{4}-[\dA-F]{12}$/;
 const AMOUNT_PATTERN = /^\d+(?:\.\d{1,6})?$/;
@@ -133,6 +134,152 @@ function single(parent: Element, name: string, namespace: string, required = tru
     throw new Error(`El CFDI debe contener ${required ? 'exactamente' : 'como máximo'} un nodo ${name}.`);
   }
   return matches[0];
+}
+
+/** Optional documentary nodes must not silently accept a same-name forged namespace. */
+function documentaryChildren(parent: Element, localName: string, namespace: string): Element[] {
+  for (const [name, value] of Object.entries(parent.node)) {
+    if (name.startsWith('@_') || name.startsWith('?') || name === '#text') continue;
+    const local = name.split(':').pop()!;
+    if (local.toLowerCase() !== localName.toLowerCase()) continue;
+    for (const entry of Array.isArray(value) ? value : [value]) {
+      const node = nodeObject(entry);
+      if (local !== localName || namespaceOf(name, namespacesFor(node, parent.namespaces)) !== namespace) {
+        throw new Error(`El nodo ${localName} tiene un nombre o namespace inválido.`);
+      }
+    }
+  }
+  return children(parent, localName, namespace);
+}
+
+function documentarySingle(parent: Element, name: string, namespace: string): Element {
+  const matches = documentaryChildren(parent, name, namespace);
+  if (matches.length !== 1) throw new Error(`El CFDI debe contener exactamente un nodo ${name}.`);
+  return matches[0];
+}
+
+function declaredUuid(value: string, currentUuid: string): string {
+  const uuid = value.toUpperCase();
+  if (!UUID_PATTERN.test(uuid)) throw new Error('Una referencia documental no contiene un UUID válido.');
+  if (uuid === currentUuid) throw new Error('Un comprobante no puede referirse a su propio UUID.');
+  return uuid;
+}
+
+function relatedDocuments(root: Element, namespace: string, currentUuid: string): CfdiRelation[] | undefined {
+  const groups = documentaryChildren(root, 'CfdiRelacionados', namespace);
+  if (!groups.length) return undefined;
+  if (groups.length > 20) throw new Error('El piloto admite como máximo 20 grupos de CFDI relacionados.');
+  let referenceCount = 0;
+  return groups.map(group => {
+    const type = attr(group.node, 'TipoRelacion');
+    if (!/^0[1-9]$/.test(type)) throw new Error('La clave TipoRelacion es inválida.');
+    const references = documentaryChildren(group, 'CfdiRelacionado', namespace);
+    referenceCount += references.length;
+    if (!references.length || referenceCount > 1000) {
+      throw new Error('Los grupos requieren CFDI relacionados y admiten como máximo 1000 referencias en total.');
+    }
+    const uuids = references.map(reference => declaredUuid(attr(reference.node, 'UUID'), currentUuid));
+    if (new Set(uuids).size !== uuids.length) throw new Error('Un grupo contiene UUID relacionados duplicados.');
+    return {type, uuids};
+  });
+}
+
+/** Decimal strings retain source precision; integer arithmetic never passes through Number. */
+function decimalAttribute(node: XmlNode, name: string, digits = 6, positive = false): {text: string; scaled: bigint} {
+  const text = attr(node, name);
+  // Bounded pilot amounts/rates keep parsing and rendering finite even for hostile XML.
+  if (!new RegExp(`^\\d{1,10}(?:\\.\\d{1,${digits}})?$`).test(text)) {
+    throw new Error(`El importe o tipo de cambio ${name} es inválido o excede la precisión admitida.`);
+  }
+  const [whole, fraction = ''] = text.split('.');
+  const scaled = BigInt(whole + fraction.padEnd(digits, '0'));
+  const scale = 10n ** BigInt(digits);
+  if (scaled > 10_000_000_000n * scale || (positive && scaled === 0n)) {
+    throw new Error(`El importe o tipo de cambio ${name} está fuera de los límites admitidos.`);
+  }
+  return {text, scaled};
+}
+
+function paymentCurrency(node: XmlNode, name: string): string {
+  const currency = attr(node, name);
+  if (!/^[A-Z]{3}$/.test(currency) || currency === 'XXX') throw new Error(`La moneda ${name} es inválida.`);
+  return currency;
+}
+
+function payments(complement: Element, version: string, type: string, currentUuid: string): CfdiPaymentComplement | undefined {
+  if (type === 'P' && version !== '4.0') throw new Error('El piloto sólo admite pagos en CFDI 4.0 con complemento Pagos 2.0; los pagos de CFDI 3.3 no están admitidos.');
+  if (children(complement, 'Pagos', 'http://www.sat.gob.mx/Pagos').length) {
+    throw new Error('El complemento Pagos 1.0 no está admitido; el piloto sólo admite CFDI 4.0 con Pagos 2.0.');
+  }
+  const paymentNodes = documentaryChildren(complement, 'Pagos', PAYMENTS_NAMESPACE);
+  if (type !== 'P') {
+    if (paymentNodes.length) throw new Error('El complemento Pagos requiere un comprobante de tipo P.');
+    return undefined;
+  }
+  if (paymentNodes.length !== 1) throw new Error('El comprobante P requiere exactamente un complemento Pagos 2.0.');
+  const paymentRoot = paymentNodes[0];
+  if (attr(paymentRoot.node, 'Version') !== '2.0') throw new Error('El piloto sólo admite la versión 2.0 del complemento Pagos.');
+  const totals = documentarySingle(paymentRoot, 'Totales', PAYMENTS_NAMESPACE);
+  const declaredTotal = decimalAttribute(totals.node, 'MontoTotalPagos', 2);
+  const paymentElements = documentaryChildren(paymentRoot, 'Pago', PAYMENTS_NAMESPACE);
+  if (!paymentElements.length || paymentElements.length > 100) throw new Error('El complemento requiere pagos y el piloto admite como máximo 100 nodos Pago.');
+  let relatedCount = 0;
+  let totalMxnScaled12 = 0n;
+  const records = paymentElements.map(payment => {
+    const date = attr(payment.node, 'FechaPago');
+    if (!validDate(date)) throw new Error('La fecha del pago es inválida.');
+    const form = attr(payment.node, 'FormaDePagoP');
+    if (!/^\d{2}$/.test(form)) throw new Error('La clave FormaDePagoP es inválida.');
+    const currency = paymentCurrency(payment.node, 'MonedaP');
+    const amount = decimalAttribute(payment.node, 'Monto', 6, true);
+    const hasExchangeRate = payment.node['@_TipoCambioP'] !== undefined;
+    if (currency !== 'MXN' && !hasExchangeRate) throw new Error('El pago en moneda distinta de MXN requiere TipoCambioP.');
+    const exchangeRate = hasExchangeRate ? decimalAttribute(payment.node, 'TipoCambioP', 6, true) : undefined;
+    if (currency === 'MXN' && exchangeRate && exchangeRate.scaled !== 1_000_000n) {
+      throw new Error('TipoCambioP debe ser uno para un pago en MXN.');
+    }
+    totalMxnScaled12 += amount.scaled * (exchangeRate?.scaled ?? 1_000_000n);
+    const documentElements = documentaryChildren(payment, 'DoctoRelacionado', PAYMENTS_NAMESPACE);
+    relatedCount += documentElements.length;
+    if (!documentElements.length || relatedCount > 1000) {
+      throw new Error('Cada pago requiere documentos relacionados y el piloto admite como máximo 1000 en total.');
+    }
+    const seen = new Set<string>();
+    let sameCurrencyPaid = 0n;
+    const relatedDocuments = documentElements.map(document => {
+      const uuid = declaredUuid(attr(document.node, 'IdDocumento'), currentUuid);
+      if (seen.has(uuid)) throw new Error('Un pago contiene UUID de documentos relacionados duplicados.');
+      seen.add(uuid);
+      const documentCurrency = paymentCurrency(document.node, 'MonedaDR');
+      const hasEquivalence = document.node['@_EquivalenciaDR'] !== undefined;
+      if (documentCurrency !== currency && !hasEquivalence) throw new Error('Las monedas distintas requieren EquivalenciaDR.');
+      const equivalence = hasEquivalence ? decimalAttribute(document.node, 'EquivalenciaDR', 10, true) : undefined;
+      if (documentCurrency === currency && equivalence && equivalence.scaled !== 10_000_000_000n) {
+        throw new Error('EquivalenciaDR debe ser uno cuando las monedas coinciden.');
+      }
+      const installmentText = attr(document.node, 'NumParcialidad');
+      if (!/^[1-9]\d{0,2}$/.test(installmentText)) throw new Error('NumParcialidad debe estar entre 1 y 999.');
+      const previous = decimalAttribute(document.node, 'ImpSaldoAnt');
+      const paid = decimalAttribute(document.node, 'ImpPagado', 6, true);
+      const remaining = decimalAttribute(document.node, 'ImpSaldoInsoluto');
+      if (paid.scaled > previous.scaled || previous.scaled - paid.scaled !== remaining.scaled) {
+        throw new Error('Los saldos del documento relacionado son inconsistentes: saldo anterior menos pago debe ser saldo insoluto.');
+      }
+      if (documentCurrency === currency) sameCurrencyPaid += paid.scaled;
+      const taxObject = attr(document.node, 'ObjetoImpDR');
+      if (!/^\d{2}$/.test(taxObject)) throw new Error('La clave ObjetoImpDR es inválida.');
+      return {uuid, currency: documentCurrency, equivalence: equivalence?.text, installment: Number(installmentText),
+        previousBalance: previous.text, paidAmount: paid.text, remainingBalance: remaining.text, taxObject};
+    });
+    if (sameCurrencyPaid > amount.scaled) {
+      throw new Error('Los importes pagados en la misma moneda no pueden superar Monto.');
+    }
+    return {date, currency, amount: amount.text, form, exchangeRate: exchangeRate?.text, relatedDocuments};
+  });
+  // All products have scale 12. Round their sum once to MXN cents, half upwards.
+  const computedTotalCents = (totalMxnScaled12 + 5_000_000_000n) / 10_000_000_000n;
+  if (computedTotalCents !== declaredTotal.scaled) throw new Error('MontoTotalPagos no coincide con la suma de pagos expresados en MXN.');
+  return {version: '2.0', totalPaymentsMxn: declaredTotal.text, payments: records};
 }
 
 function amount(node: XmlNode, name: string, required = true): number {
@@ -253,6 +400,8 @@ export class XmlCfdiParser {
       if (!/^[A-Z]{3}$/.test(currency)) throw new Error('La moneda del CFDI es inválida.');
       const tipo = attr(rootNode, 'TipoDeComprobante');
       if (!['I', 'E', 'T', 'N', 'P'].includes(tipo)) throw new Error('El tipo de comprobante es inválido.');
+      const metodoPago = attr(rootNode, 'MetodoPago');
+      if (rootNode['@_MetodoPago'] !== undefined && !['PUE', 'PPD'].includes(metodoPago)) throw new Error('El método de pago es inválido.');
       if ((tipo === 'P' || tipo === 'T') !== (currency === 'XXX')) throw new Error('La moneda XXX corresponde a comprobantes de traslado o pago.');
       const currencyDigits = new Intl.NumberFormat('en', { style: 'currency', currency }).resolvedOptions().maximumFractionDigits ?? 2;
       const subtotal = amount(rootNode, 'SubTotal');
@@ -265,10 +414,27 @@ export class XmlCfdiParser {
       const uuidSat = attr(timbre.node, 'UUID').toUpperCase();
       if (!UUID_PATTERN.test(uuidSat)) throw new Error('El timbre fiscal debe contener un UUID válido.');
       if (attr(timbre.node, 'Version') !== '1.1' || !validDate(attr(timbre.node, 'FechaTimbrado'))) throw new Error('El timbre fiscal 1.1 o su fecha son inválidos.');
+      const relatedCfdis = relatedDocuments(root, namespace, uuidSat);
+      const paymentComplement = payments(complemento, version, tipo, uuidSat);
 
       const conceptosNode = single(root, 'Conceptos', namespace)!;
       const conceptElements = children(conceptosNode, 'Concepto', namespace);
       if (!conceptElements.length) throw new Error('El CFDI no contiene conceptos.');
+      if (tipo === 'P') {
+        const concept = conceptElements[0].node;
+        if (conceptElements.length !== 1 || attr(concept, 'ClaveProdServ') !== '84111506'
+          || attr(concept, 'ClaveUnidad') !== 'ACT' || attr(concept, 'Descripcion') !== 'Pago'
+          || amount(concept, 'Cantidad') !== 1 || amount(concept, 'ValorUnitario') !== 0
+          || amount(concept, 'Importe') !== 0 || attr(concept, 'ObjetoImp') !== '01'
+          || concept['@_Descuento'] !== undefined || children(conceptElements[0], 'Impuestos', namespace).length) {
+          throw new Error('El comprobante P requiere un único concepto Pago con clave 84111506, unidad ACT, cantidad uno, ObjetoImp 01 e importes cero.');
+        }
+        if (rootNode['@_FormaPago'] !== undefined || rootNode['@_MetodoPago'] !== undefined
+          || rootNode['@_Descuento'] !== undefined || children(root, 'Impuestos', namespace).length
+          || subtotal !== 0 || total !== 0) {
+          throw new Error('El comprobante P requiere subtotal y total cero, sin FormaPago, MetodoPago, descuentos ni impuestos en el comprobante.');
+        }
+      }
       let conceptSubtotal = 0;
       let conceptDiscount = 0;
       let conceptTransferred = 0;
@@ -329,6 +495,7 @@ export class XmlCfdiParser {
         descuento,
         currency,
         formaPago: attr(rootNode, 'FormaPago') || undefined,
+        metodoPago: metodoPago ? metodoPago as 'PUE' | 'PPD' : undefined,
         usoCfdi: attr(receptor.node, 'UsoCFDI') || undefined,
         fechaEmision: fecha,
         tipoComprobante: tipo as CfdiRecord['tipoComprobante'],
@@ -336,6 +503,8 @@ export class XmlCfdiParser {
         isEfos: false,
         conceptos,
         sourceType: 'xml',
+        relatedCfdis,
+        paymentComplement,
       };
       return {
         success: true,

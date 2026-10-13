@@ -2,6 +2,7 @@ import { Profile, BankTransaction, CfdiRecord, CashFlowMetrics } from './types';
 import { SEED_PROFILE, SEED_CFDIS, SEED_TRANSACTIONS } from './seed';
 import { MatchingEngineService, calendarDay, canonicalUuid } from './MatchingEngineService';
 import { EfosService } from './efosService';
+import { cfdiSchema } from './validation';
 
 const STORAGE_KEY_TXS = 'facturia_bank_transactions_v1';
 const STORAGE_KEY_CFDIS = 'facturia_cfdis_v1';
@@ -41,9 +42,17 @@ function validTransaction(value: unknown): value is BankTransaction {
 
 function validCfdi(value: unknown): value is CfdiRecord {
   if (!object(value)) return false;
+  const documentaryZero = ['P', 'T'].includes(String(value.tipoComprobante))
+    && typeof value.currency === 'string' && value.currency.toUpperCase() === 'XXX'
+    && value.subtotal === 0 && value.iva === 0 && value.retenciones === 0;
+  // Legacy demo records retain their original validation. Newly imported payment
+  // and relationship metadata must satisfy the same contract as owner backups.
+  const hasDocumentaryMetadata = value.tipoComprobante === 'P' || value.metodoPago !== undefined
+    || value.relatedCfdis !== undefined || value.paymentComplement !== undefined;
+  if (hasDocumentaryMetadata && !cfdiSchema.safeParse(value).success) return false;
   return nonempty(value.id) && nonempty(value.userId) && typeof value.uuidSat === 'string'
     && nonempty(value.rfcEmisor) && nonempty(value.rfcReceptor)
-    && finiteAmount(value.total) && value.total > 0
+    && finiteAmount(value.total) && (value.total > 0 || (value.total === 0 && documentaryZero))
     && finiteAmount(value.subtotal) && value.subtotal >= 0
     && finiteAmount(value.iva) && value.iva >= 0
     && finiteAmount(value.retenciones) && value.retenciones >= 0

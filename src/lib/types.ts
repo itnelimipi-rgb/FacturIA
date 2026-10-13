@@ -49,6 +49,9 @@ export interface CfdiRecord {
   descuento?: number;
   usoCfdi?: string;
   formaPago?: string;
+  metodoPago?: 'PUE' | 'PPD';
+  relatedCfdis?: CfdiRelation[];
+  paymentComplement?: CfdiPaymentComplement;
   rawXml?: string;
   satVerification?: SatVerification;
   attachment?: {
@@ -57,6 +60,20 @@ export interface CfdiRecord {
     sha256: string;
     source: 'pdf' | 'image';
   };
+}
+
+/** Declared documentary references; they never create bank movements or fiscal validity. */
+export interface CfdiRelation { type: string; uuids: string[]; }
+export interface CfdiPaymentRelatedDocument {
+  uuid: string; currency: string; equivalence?: string; installment: number;
+  previousBalance: string; paidAmount: string; remainingBalance: string; taxObject: string;
+}
+export interface CfdiPayment {
+  date: string; currency: string; amount: string; form: string; exchangeRate?: string;
+  relatedDocuments: CfdiPaymentRelatedDocument[];
+}
+export interface CfdiPaymentComplement {
+  version: '2.0'; totalPaymentsMxn: string; payments: CfdiPayment[];
 }
 
 /** A dated response from the fixed SAT consultation service, not a seal/XSD validation. */

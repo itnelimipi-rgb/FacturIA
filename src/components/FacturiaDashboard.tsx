@@ -372,6 +372,7 @@ export default function FacturiaDashboard({ mode = 'demo', initialSnapshot }: { 
         isOpen={!!selectedCfdi}
         onClose={() => setSelectedCfdi(null)}
         cfdi={selectedCfdi}
+        documents={cfdis}
       />
     </main>
   );

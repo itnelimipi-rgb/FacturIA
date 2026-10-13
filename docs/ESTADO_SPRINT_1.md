@@ -8,6 +8,34 @@ para recursos de todo el workspace.
 
 ## Incremento del 11 de octubre implementado en código
 
+### Documentos relacionados y pagos — 12 de octubre
+
+- Lectura de `CfdiRelacionados` y método PUE/PPD; detalle y listado distinguen
+  ingreso, egreso/nota de crédito, pagos, nómina y traslado.
+- Pagos 2.0 en CFDI 4.0: Monto/MonedaP, UUID/MonedaDR, parcialidad y saldos
+  declarados. Decimales preservados como texto y comprobaciones con BigInt.
+  Rechaza un CFDI P sin Pagos, referencias/namespace falsos, saldos incoherentes,
+  subtotal pagado en la moneda del pago superior a Monto y total MXN inconsistente.
+- Total XML P cero/XXX separado del monto del pago. El panel suma XML I por
+  moneda y muestra notas E aparte; E/P no se convierten en movimientos ni se
+  concilian automáticamente. La demo inicial conserva seis comprobantes y cinco
+  movimientos. CSV de comprobantes con tipos/relaciones/importes separados.
+- Metadatos conservados en demo, JSON y PostgreSQL; restaurar interpreta el XML
+  original y descarta metadatos de pago falsificados por el respaldo.
+
+Fuentes técnicas: [CFDI 4.0](https://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd)
+y [Pagos 2.0](https://www.sat.gob.mx/sitio_internet/cfd/Pagos/Pagos20.xsd).
+Alcance documental: no valida XSD completo, sellos, catálogo íntegro o impuestos
+del complemento; no emite CFDI ni determina deducciones. EquivalenciaDR entre
+monedas distintas se muestra declarada, sin conciliar la conversión de saldos.
+Pagos 1.0 y CFDI 3.3 de pago quedan fuera de este incremento. Límite: 100 pagos,
+1,000 documentos relacionados y 20 grupos de relaciones por XML; la UI muestra
+listas acotadas y remite al original para revisar el resto.
+Validación local: **373 pruebas**, lint, TypeScript y build aprobados; auditoría
+npm completa con cero vulnerabilidades conocidas. Las pruebas incluyen JSONB,
+restauración desde XML, entradas malformadas y ausencia de movimientos o vínculos
+bancarios creados por E/P. CI y pruebas del despliegue se registrarán al completarse.
+
 ### Guías de revisión — 12 de octubre
 
 El asistente por reglas explica cómo revisar candidatos y los estados conciliado,

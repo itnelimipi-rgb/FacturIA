@@ -111,7 +111,7 @@ export function buildLocalAssistantContext(snapshot: {profile: Profile; transact
   }
   const cfdis = ownedDocuments.map(record => cfdiSchema.parse({...record, rawXml: undefined})).filter(record => record.rfcEmisor === profile.rfc || record.rfcReceptor === profile.rfc);
   const transactions = MatchingEngineService.evaluateBatch(ownedTransactions.map(record => transactionSchema.parse(record)), cfdis, profile);
-  const currencies = [...new Set(transactions.map(record => record.currency.toUpperCase()).concat(cfdis.map(record => (record.currency ?? 'MXN').toUpperCase())))].sort();
+  const currencies = [...new Set(transactions.map(record => record.currency.toUpperCase()).concat(cfdis.map(record => (record.currency ?? 'MXN').toUpperCase())))].filter(currency => currency !== 'XXX').sort();
   const metrics = currencies.slice(0, MAX_CURRENCIES).map(currency => {
     const computed = MatchingEngineService.calculateCashFlowShieldMetrics(transactions, cfdis, 0, currency);
     return {currency, income: computed.totalIncome, expense: computed.totalExpense, importedNet: computed.totalBankBalance,
