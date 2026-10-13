@@ -164,6 +164,7 @@ Dominio/remitente, correo real y WhatsApp quedan pospuestos por indicación del 
 El proveedor de correo permanece desactivado.
 
 Leer [estado del sprint](docs/ESTADO_SPRINT_1.md), [plan de avance](docs/PLAN_AVANCE.md),
+[plan de frontend y experiencia de usuario](docs/PLAN_FRONTEND_UX.md),
 [staging](docs/STAGING.md) y [coordinación con Claude Code](docs/COORDINACION.md).
 `railway.json` configura build, migración y healthcheck. Railway mantiene un
 límite duro de USD 10 para recursos de todo el workspace. El servicio está

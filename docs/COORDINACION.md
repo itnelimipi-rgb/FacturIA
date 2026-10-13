@@ -3,6 +3,10 @@
 El trabajo activo está en `sprint-1`. La demo y el espacio autenticado comparten
 componentes, pero no almacenamiento ni datos. Consultar `docs/PLAN_AVANCE.md` y
 `docs/STAGING.md` antes de continuar.
+La prioridad actual es frontend y experiencia para personas sin conocimientos
+financieros: seguir `docs/PLAN_FRONTEND_UX.md`. Es un plan pendiente de implementar;
+primero corregir significado de acciones/estados e inicio guiado, y después
+ampliar los recorridos. No iniciar correos ni WhatsApp en este bloque.
 
 Para compartir este repo entre Codex y Claude Code en la misma PC:
 

@@ -5,6 +5,15 @@ La rama continuará separada de `main` hasta autorización explícita del usuari
 Priorizar herramientas open source y APIs gratuitas; conservar el límite duro
 de USD 10 de recursos para el conjunto del workspace Railway.
 
+## Prioridad actual — frontend y comprensión
+
+El siguiente bloque se centra en que una persona sin conocimientos financieros
+pueda entender y usar el producto sin contexto del desarrollador. Seguir el
+[plan de frontend y UX](PLAN_FRONTEND_UX.md): lenguaje y acciones, primer uso,
+cargas guiadas, revisión contextual, accesibilidad y prueba de comprensión.
+Las entregas de ese plan todavía no están implementadas; los pendientes de
+integración permanecen en este documento para retomarlos después.
+
 ## Resultado que buscamos
 
 Un usuario inicia sesión, configura su RFC, importa XML originales, PDF/imágenes
