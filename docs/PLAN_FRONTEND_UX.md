@@ -1,8 +1,8 @@
 # Plan de frontend y experiencia de usuario de FacturIA
 
 Fecha: 12 de octubre de 2026. Rama: `sprint-1`.
-Estado: primera iteración implementada y validada localmente el 13 de octubre;
-publicación y despliegue pendientes de registrar. El plan completo sigue en curso.
+Estado: primera iteración publicada y validada localmente y en staging el 13 de
+octubre. Evidencia en `ESTADO_SPRINT_1.md` y `STAGING.md`. El plan completo sigue en curso.
 Base revisada: código de `8997e09`, demo desplegada y recorridos del frontend.
 
 ## Primera iteración — 13 de octubre
@@ -20,8 +20,11 @@ de guía con los nombres nuevos. La revisión móvil motivó ajustar la cabecera
 el desplazamiento a destinos. Pasaron 407 pruebas, lint, tipos y build. En la
 compilación final se comprobó ancho de 320 px sin desbordamiento, aviso y foco
 visibles al vincular/quitar/volver a buscar, y reinicio a los datos originales.
-La prueba de comprensión sin ayuda del dueño
-sigue pendiente: ninguna prueba automatizada la sustituye.
+En staging se comprobaron datos anteriores, guías y primer uso. El cambio de
+acceso a perfil ahora empieza con RFC/nombre vacíos y régimen sin preselección;
+guardar el perfil, recargar y cerrar sesión conservaron el resultado esperado.
+La prueba de comprensión sin ayuda del dueño sigue pendiente: ninguna prueba
+automatizada la sustituye.
 
 Quedan navegación completamente separada en Movimientos/Documentos, mapeo de
 columnas de distintos CSV, perfil incompleto, captura simplificada de gastos,

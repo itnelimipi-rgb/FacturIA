@@ -8,7 +8,7 @@ para recursos de todo el workspace.
 
 ## Frontend y experiencia de usuario — 13 de octubre
 
-Primera iteración implementada en código:
+Primera iteración publicada y comprobada en staging:
 
 - Inicio explica documentos/movimientos y ofrece el siguiente paso según los
   registros; los pendientes abren la lista con el filtro correspondiente.
@@ -46,10 +46,19 @@ HTTPS con cuentas anteriores y cinco preguntas de ayuda por reglas, con datos
 intactos y sesiones invalidadas. Una nueva cuenta sintética empezó sin perfil ni
 registros. Su primer uso detectó reutilización del correo en el campo RFC; la
 corrección separa los formularios y volvió a pasar 407 pruebas, lint, tipos y build;
-el checkpoint y la repetición del primer uso quedan pendientes de registrar.
+publicada como `860974488a41017cd4d9b3f14a50cdac76b9d6bf`, con
+[CI aprobado](https://github.com/itnelimipi-rgb/FacturIA/actions/runs/38500342854).
+Deployment `62ca96bd-0b66-4921-bf51-b882cad71706`: **SUCCESS**, fijado a ese
+commit. La repetición visual confirmó RFC/nombre vacíos, régimen requerido sin
+preselección y opción de copiar un código cuando no aparece en la lista. El
+perfil sintético guardado persistió al recargar; el Inicio vacío propone ambos
+tipos de carga y no inventa un saldo bancario. La sesión se cerró y la demo quedó
+con seis documentos/cinco movimientos, tres vinculados/uno por revisar/uno sin
+documento. Evidencia visual de Inicio y cuenta vacía guardada en los artefactos
+del chat, sin publicar credenciales ni archivos privados en el repositorio.
 No se añadieron dependencias ni recursos de Railway.
-Consumo de recursos del workspace leído el 13 de octubre a las 20:15 (Ciudad
-de México): **USD 0.0612**, con límite duro **USD 10** activo y sin excederlo.
+Consumo de recursos del workspace leído el 13 de octubre a las 20:42 (Ciudad
+de México): **USD 0.0654**, con límite duro **USD 10** activo y sin excederlo.
 El nuevo ciclo va del 13 de octubre al 13 de noviembre a las 13:13; USD 6.60
 corresponde a la lectura histórica del ciclo anterior.
 

@@ -37,11 +37,21 @@ fiscales; documentos, movimientos y perfil quedaron intactos al preguntar.
 Una cuenta sintética nueva empezó sin perfil ni registros. El recorrido de
 interfaz detectó que, al pasar de acceso a perfil, React reutilizaba el input del
 correo en el RFC. La corrección separa el ciclo de vida de los formularios y
-volvió a pasar 407 pruebas, lint, tipos y build local; su checkpoint y repetición
-del recorrido se registrarán al completarse.
+volvió a pasar 407 pruebas, lint, tipos y build local. Publicada como
+`860974488a41017cd4d9b3f14a50cdac76b9d6bf`, con
+[CI aprobado](https://github.com/itnelimipi-rgb/FacturIA/actions/runs/38500342854).
+Deployment `62ca96bd-0b66-4921-bf51-b882cad71706`: **SUCCESS**, fijado a ese
+commit. Se repitió el acceso de la cuenta sin perfil en la versión desplegada:
+RFC/nombre vacíos, régimen requerido sin preselección y campo de código cuando
+se elige «Mi régimen no aparece». Guardar un perfil sintético abrió un Inicio
+sin documentos ni movimientos; recargar conservó el perfil y cerrar sesión
+regresó al acceso. Se dejó la demo intacta con seis documentos/cinco movimientos
+y distribución tres vinculados/uno por revisar/uno sin documento. Capturas reales
+de Inicio y cuenta vacía guardadas como artefactos del chat. Credenciales sólo en
+caché ignorada; no se añadieron archivos privados al repositorio.
 
-Consumo del workspace leído el 13 de octubre a las 20:15 (Ciudad de México):
-**USD 0.0612**, límite duro **USD 10** activo, `isOverLimit: false`.
+Consumo del workspace leído el 13 de octubre a las 20:42 (Ciudad de México):
+**USD 0.0654**, límite duro **USD 10** activo, `isOverLimit: false`.
 Nuevo ciclo: 13 de octubre → 13 de noviembre a las 13:13. La lectura histórica
 de USD 6.60 corresponde al ciclo anterior. Correos, remitente/dominio y WhatsApp
 siguen pospuestos por el usuario.

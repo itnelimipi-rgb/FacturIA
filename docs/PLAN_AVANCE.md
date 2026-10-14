@@ -11,8 +11,8 @@ El siguiente bloque se centra en que una persona sin conocimientos financieros
 pueda entender y usar el producto sin contexto del desarrollador. Seguir el
 [plan de frontend y UX](PLAN_FRONTEND_UX.md): lenguaje y acciones, primer uso,
 cargas guiadas, revisión contextual, accesibilidad y prueba de comprensión.
-La primera iteración de lenguaje e Inicio guiado está implementada en código;
-su validación final se registra en el estado del sprint. El plan completo y la
+La primera iteración de lenguaje e Inicio guiado está publicada y comprobada en
+staging; su evidencia se registra en el estado del sprint. El plan completo y la
 prueba de comprensión con el dueño siguen pendientes. Los pendientes de
 integración permanecen en este documento para retomarlos después.
 
