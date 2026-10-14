@@ -323,10 +323,10 @@ guardado real, fallo/reintento, foco y significado de estados. No añadir prueba
 sólo repitan textos; preservar regresiones de importación, relaciones, monedas y permisos.
 
 Publicar en staging sólo una implementación probada y guardar evidencia visual.
-El plan no modifica el deployment actual. La promoción a `main` sigue requiriendo
+Fijar el despliegue al commit validado. La promoción a `main` sigue requiriendo
 autorización explícita. No iniciar correos, dominio/remitente, WhatsApp ni nuevos
 proveedores o servicios. Esta fase no necesita otra base de datos ni API de pago;
 Railway conserva el límite de USD 10 para recursos del workspace.
 
-Primera implementación prevista: Entrega 1 y el inicio guiado de la Entrega 2;
+Alcance de la primera implementación: Entrega 1 y el inicio guiado de la Entrega 2;
 validar ese recorrido antes de extender la nueva experiencia a toda la app.

@@ -36,10 +36,20 @@ La prueba de comprensión del dueño está pendiente, junto con el resto del
 plan UX: navegación separada, mapeo CSV, perfil incompleto, captura simplificada,
 revisión completa de accesibilidad, zoom y más dispositivos.
 Validación local: **407/407 pruebas**, lint, TypeScript y compilación aprobados.
-Auditoría npm completa: cero vulnerabilidades conocidas. CI y deployment se
-registrarán al completarse. No se añadieron dependencias ni recursos de Railway.
-Consumo de recursos del workspace leído el 13 de octubre a las 19:41 (Ciudad
-de México): **USD 0.0553**, con límite duro **USD 10** activo y sin excederlo.
+Auditoría npm completa: cero vulnerabilidades conocidas. Publicado como
+`cf56569d88c19be18d845b700666557966a60f28`, con
+[CI aprobado](https://github.com/itnelimipi-rgb/FacturIA/actions/runs/38497611693).
+La plantilla CSV se probó en interfaz: vista previa sin guardar, confirmación de
+dos registros y reinicio a cinco movimientos. Deployment
+`bdd26a3a-2f57-4176-be95-2800b827ce5c`: **SUCCESS**. Pasaron ocho comprobaciones
+HTTPS con cuentas anteriores y cinco preguntas de ayuda por reglas, con datos
+intactos y sesiones invalidadas. Una nueva cuenta sintética empezó sin perfil ni
+registros. Su primer uso detectó reutilización del correo en el campo RFC; la
+corrección separa los formularios y volvió a pasar 407 pruebas, lint, tipos y build;
+el checkpoint y la repetición del primer uso quedan pendientes de registrar.
+No se añadieron dependencias ni recursos de Railway.
+Consumo de recursos del workspace leído el 13 de octubre a las 20:15 (Ciudad
+de México): **USD 0.0612**, con límite duro **USD 10** activo y sin excederlo.
 El nuevo ciclo va del 13 de octubre al 13 de noviembre a las 13:13; USD 6.60
 corresponde a la lectura histórica del ciclo anterior.
 

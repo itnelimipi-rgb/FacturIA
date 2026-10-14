@@ -7,6 +7,45 @@ Railway Agent e impuestos tienen tratamiento independiente: no ejecutar Agent
 ni contratar integraciones adicionales sin revisar el presupuesto.
 También hay PostgreSQL local aislado para desarrollar sin depender de staging.
 
+## Primer uso y revisión comprensible — 13 de octubre
+
+Código publicado en `sprint-1` como `cf56569d88c19be18d845b700666557966a60f28`,
+con autoría y committer de Danipb15, sin coautores. Pasaron **407/407 pruebas**,
+lint, TypeScript y compilación; auditoría npm completa sin vulnerabilidades.
+[CI aprobado para ese commit](https://github.com/itnelimipi-rgb/FacturIA/actions/runs/38497611693).
+Inicio propone acciones según los registros; estados, importes y guías usan los
+controles reales. Los pagos, facturas y movimientos bancarios quedan distinguidos.
+CSV ofrece una plantilla y confirma antes de guardar; captura provisional deja
+impuestos desconocidos vacíos. Los respaldos y datos técnicos quedan secundarios.
+
+Recorrido local: filtros desde Inicio, comparar candidatos, vincular/quitar/volver
+a buscar, XML con contexto y apertura del documento guardado, teclado/Escape,
+plantilla con dos movimientos y reinicio a seis documentos/cinco movimientos,
+con tres vinculados/uno por revisar/uno sin documento. A 320 px se comprobó
+ausencia de desbordamiento horizontal y aviso/foco visibles después de una acción.
+La comprobación móvil adicional se hizo a 390 px; no sustituye una auditoría
+completa de dispositivos, zoom o accesibilidad ni la prueba de comprensión del dueño.
+
+Sólo se cambió el SHA de fuente de web en staging; no hay migraciones nuevas,
+dependencias, servicios ni proveedores externos adicionales. Se revisó el patch
+antes de aplicarlo: un cambio de web, sin variables o recursos ajenos.
+Deployment `bdd26a3a-2f57-4176-be95-2800b827ce5c`: **SUCCESS**, fijado al SHA
+publicado. Pasaron ocho comprobaciones HTTPS de persistencia de documentos,
+originales, metadatos, aislamiento, exportación y cierre de sesiones anteriores.
+Cinco preguntas de ayuda pasaron por reglas, incluidas las preguntas mixtas
+fiscales; documentos, movimientos y perfil quedaron intactos al preguntar.
+Una cuenta sintética nueva empezó sin perfil ni registros. El recorrido de
+interfaz detectó que, al pasar de acceso a perfil, React reutilizaba el input del
+correo en el RFC. La corrección separa el ciclo de vida de los formularios y
+volvió a pasar 407 pruebas, lint, tipos y build local; su checkpoint y repetición
+del recorrido se registrarán al completarse.
+
+Consumo del workspace leído el 13 de octubre a las 20:15 (Ciudad de México):
+**USD 0.0612**, límite duro **USD 10** activo, `isOverLimit: false`.
+Nuevo ciclo: 13 de octubre → 13 de noviembre a las 13:13. La lectura histórica
+de USD 6.60 corresponde al ciclo anterior. Correos, remitente/dominio y WhatsApp
+siguen pospuestos por el usuario.
+
 ## Documentos relacionados y Pagos 2.0 — 12 de octubre
 
 Publicado en `sprint-1` como `561566cc8f71de6d46546fd9d8a601910f78cab0`, con
