@@ -30,7 +30,7 @@ export const AssistantChat: React.FC<AssistantChatProps> = props => <AssistantSe
 
 const AssistantSession: React.FC<AssistantChatProps> = ({ mode, profile, metrics, transactions, cfdis }) => {
   const [messages, setMessages] = useState<Message[]>([]);
-  const welcome: Message = { id: 'm-init', sender: 'assistant', text: `Hola, ${profile.businessName}. Puedo resumir tus movimientos y comprobantes registrados: hay ${metrics.conciliadoCount} movimiento(s) conciliados, ${metrics.ambiguoCount} ambiguos y ${metrics.discrepanciaCount} en discrepancia.\n\nPor defecto uso reglas y datos de ${mode === 'demo' ? 'la demostración' : 'tu espacio'}. Puedes activar una IA gratuita que procesa las preguntas en tu dispositivo. La consulta SAT se solicita aparte desde cada comprobante.` };
+  const welcome: Message = { id: 'm-init', sender: 'assistant', text: `Hola, ${profile.businessName}. Puedo ayudarte a entender qué cargaste y qué necesita tu atención: ${metrics.conciliadoCount} movimiento(s) tienen documento vinculado, ${metrics.ambiguoCount} coincidencia(s) necesitan revisión y ${metrics.discrepanciaCount} no tienen documento vinculado.\n\nUso los datos de ${mode === 'demo' ? 'los ejemplos de la demo' : 'tu espacio'}. Los resúmenes se calculan con tus registros; puedes consultarlos sin activar la IA. La consulta al SAT se hace aparte, desde cada documento.` };
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const chatBodyRef = useRef<HTMLDivElement>(null);
@@ -189,7 +189,7 @@ const AssistantSession: React.FC<AssistantChatProps> = ({ mode, profile, metrics
             const reply = await answerWithRules(text, fallback.signal);
             if (mountedRef.current && !fallback.signal.aborted) setMessages(previous => [...previous, {
               id: `a-${crypto.randomUUID()}`, sender: 'assistant', rules: true,
-              text: `La respuesta local se descartó. Este resumen se calculó con reglas.\n\n${reply}`,
+              text: `No se pudo usar la explicación de la IA. Esta respuesta se obtuvo de tus registros y la ayuda de FacturIA.\n\n${reply}`,
             }]);
             return;
           } catch { /* Keep a controlled notice if the rules request also fails. */ }
@@ -213,9 +213,9 @@ const AssistantSession: React.FC<AssistantChatProps> = ({ mode, profile, metrics
   };
 
   const suggestions = [
-    '¿Qué facturas me faltan por registrar?',
+    '¿Qué necesita mi atención?',
     'Resume mis movimientos bancarios',
-    '¿Cuáles son mis retenciones documentadas?',
+    '¿Cómo reviso una coincidencia?',
     '¿Qué verificaciones fiscales están disponibles?'
   ];
 
@@ -233,30 +233,31 @@ const AssistantSession: React.FC<AssistantChatProps> = ({ mode, profile, metrics
             </div>
             <div className="text-[11px] text-[oklch(0.72_0.17_155)] flex items-center gap-1.5 font-medium">
               <span className="w-2 h-2 rounded-full bg-[oklch(0.72_0.17_155)] animate-pulse"></span>
-              {aiState === 'ready' ? 'IA local experimental • Qwen 0.5B' : aiState === 'loading' ? 'Preparando IA en tu dispositivo' : 'Resumen de datos • Reglas configuradas'}
+              {aiState === 'ready' ? 'Explicaciones con IA experimental' : aiState === 'loading' ? 'Preparando IA en tu dispositivo' : 'Ayuda y resúmenes de tus registros'}
             </div>
           </div>
         </div>
         <span className="text-[11px] font-mono px-2.5 py-1 rounded-full bg-[oklch(0.24_0.028_260)] border border-[oklch(0.30_0.03_260)] text-[oklch(0.68_0.03_250)]">
-          {aiState === 'ready' ? 'IA local' : 'Reglas'}
+          {aiState === 'ready' ? 'IA en este dispositivo' : 'Sin activar IA'}
         </span>
       </div>
 
-      <div className="px-5 py-3 border-b border-[oklch(0.30_0.03_260)] text-xs space-y-2">
+      <details className="px-5 py-3 border-b border-[oklch(0.30_0.03_260)] text-sm space-y-2">
+        <summary className="font-semibold cursor-pointer">Opcional: explicaciones con IA en este dispositivo</summary>
         <p>IA local opcional: descarga aproximada de {LOCAL_AI_DOWNLOAD_MB} MB desde Hugging Face y MLC; requiere WebGPU y aproximadamente {LOCAL_AI_GPU_MB} MB de memoria GPU. Las explicaciones de la IA se generan en este dispositivo; las preguntas no se envían a un proveedor de IA.</p>
         <div className="flex flex-wrap gap-2">
           {aiState === 'rules' && <button type="button" disabled={isTyping || !context} onClick={() => void activateLocalAi()} className="rounded-lg border border-[oklch(0.78_0.15_195)] px-3 py-1.5 disabled:opacity-50">Activar IA local (descarga modelo)</button>}
-          {aiState !== 'rules' && <button type="button" onClick={switchToRules} className="rounded-lg border border-[oklch(0.40_0.03_260)] px-3 py-1.5">{aiState === 'loading' ? 'Cancelar descarga y usar reglas' : 'Desactivar IA y usar reglas'}</button>}
+          {aiState !== 'rules' && <button type="button" onClick={switchToRules} className="rounded-lg border border-[oklch(0.40_0.03_260)] px-3 py-1.5">{aiState === 'loading' ? 'Cancelar descarga y usar ayuda sin IA' : 'Desactivar IA y usar ayuda sin IA'}</button>}
           {isTyping && <button type="button" onClick={() => { controllerRef.current?.abort(); if (aiState === 'ready') switchToRules(); }} className="rounded-lg border border-[oklch(0.40_0.03_260)] px-3 py-1.5">Cancelar respuesta</button>}
         </div>
         {aiState === 'loading' && <div role="status"><progress max={100} value={progress} aria-label="Preparación de IA local" className="w-full" /><span>Preparación: {progress}%. La primera carga puede tardar varios minutos.</span></div>}
         {(aiError || computed.error) && <p role="alert" className="text-amber-300">{aiError || computed.error}</p>}
-        <p className="text-amber-200">La IA explica cómo revisar los estados y puede contener errores. Los resúmenes, cifras y referencias se calculan con reglas. Las decisiones fiscales requieren revisión contable.</p>
-      </div>
-      {context && <details className="px-5 py-2 border-b border-[oklch(0.30_0.03_260)] text-xs max-h-44 overflow-y-auto" open>
-        <summary className="cursor-pointer font-semibold">Resumen calculado: {context.counts.matched} conciliados, {context.counts.ambiguous} ambiguos, {context.counts.unlinked} en discrepancia</summary>
+        <p className="text-amber-200">La IA explica cómo revisar los estados y puede equivocarse. Las cifras se calculan a partir de tus registros. Las decisiones fiscales requieren revisión contable.</p>
+      </details>
+      {context && <details className="px-5 py-2 border-b border-[oklch(0.30_0.03_260)] text-sm max-h-44 overflow-y-auto">
+        <summary className="cursor-pointer font-semibold">Ver datos del resumen: {context.counts.matched} vinculados, {context.counts.ambiguous} por revisar, {context.counts.unlinked} sin documento</summary>
         <div className="mt-2 space-y-1">
-          {context.metrics.map(metric => <p key={metric.currency}>{metric.currency}: ingresos {metric.income.toFixed(2)}, egresos {metric.expense.toFixed(2)}, neto importado {metric.importedNet.toFixed(2)}, retenciones documentadas {metric.documentedWithholdings.toFixed(2)}.</p>)}
+          {context.metrics.map(metric => <p key={metric.currency}>{metric.currency}: dinero que entró {metric.income.toFixed(2)}, dinero que salió {metric.expense.toFixed(2)}, diferencia {metric.importedNet.toFixed(2)}, impuestos retenidos según documentos {metric.documentedWithholdings.toFixed(2)}.</p>)}
           {context.omittedCurrencies > 0 && <p>{context.omittedCurrencies} moneda(s) adicionales fuera del contexto local. No se convierten divisas.</p>}
           {context.references.map(reference => <p key={reference.label}>{reference.label}: {reference.date}, {reference.amount.toFixed(2)} {reference.currency} • {reference.state}</p>)}
           <p className="text-[oklch(0.68_0.03_250)]">Referencias parciales de tus registros recientes. El neto importado no representa el saldo real del banco.</p>
@@ -289,7 +290,7 @@ const AssistantSession: React.FC<AssistantChatProps> = ({ mode, profile, metrics
               }`}
             >
               {m.localAi && <p className="text-[10px] text-amber-200 mb-1">Generado por IA local experimental</p>}
-              {m.rules && <p className="text-[10px] text-teal-200 mb-1">Resumen calculado con reglas</p>}
+              {m.rules && <p className="text-sm text-teal-200 mb-1">Respuesta basada en tus registros y la ayuda de FacturIA</p>}
               <div className="whitespace-pre-wrap break-words">{m.text.split(/(\*\*[^*]+\*\*)/g).map((part, index) => part.startsWith('**') && part.endsWith('**') ? <strong key={index}>{part.slice(2, -2)}</strong> : <React.Fragment key={index}>{part}</React.Fragment>)}</div>
             </div>
           </div>

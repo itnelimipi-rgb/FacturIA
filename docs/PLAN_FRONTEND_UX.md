@@ -1,8 +1,31 @@
 # Plan de frontend y experiencia de usuario de FacturIA
 
 Fecha: 12 de octubre de 2026. Rama: `sprint-1`.
-Estado: plan preparado; las mejoras descritas todavía no están implementadas.
+Estado: primera iteración implementada y validada localmente el 13 de octubre;
+publicación y despliegue pendientes de registrar. El plan completo sigue en curso.
 Base revisada: código de `8997e09`, demo desplegada y recorridos del frontend.
+
+## Primera iteración — 13 de octubre
+
+Se incorporaron lenguaje de estados/acciones, Inicio con tareas según los datos,
+filtros desde el panel y contexto del movimiento al agregar un XML. Se separan
+facturas emitidas/recibidas del dinero cargado del banco. Los detalles de pagos
+priorizan importe y saldos declarados; los códigos quedan en una sección secundaria.
+Hay plantilla bancaria, captura provisional con impuestos desconocidos vacíos,
+respaldos en zona secundaria y diálogos con foco y Escape.
+
+La primera revisión local detectó y corrigió resultados de importación que
+sobrevivían a reiniciar ejemplos, preselección de régimen entre cuentas y falta
+de guía con los nombres nuevos. La revisión móvil motivó ajustar la cabecera y
+el desplazamiento a destinos. Pasaron 407 pruebas, lint, tipos y build. En la
+compilación final se comprobó ancho de 320 px sin desbordamiento, aviso y foco
+visibles al vincular/quitar/volver a buscar, y reinicio a los datos originales.
+La prueba de comprensión sin ayuda del dueño
+sigue pendiente: ninguna prueba automatizada la sustituye.
+
+Quedan navegación completamente separada en Movimientos/Documentos, mapeo de
+columnas de distintos CSV, perfil incompleto, captura simplificada de gastos,
+ampliación de recorridos y evaluación completa de accesibilidad/zoom/dispositivos.
 
 ## Objetivo y criterio principal
 

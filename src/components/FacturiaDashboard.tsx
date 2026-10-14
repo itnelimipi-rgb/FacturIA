@@ -15,14 +15,14 @@ import { RegisterInvoiceModal } from '../components/RegisterInvoiceModal';
 import { FiscalDashboardPanel } from '../components/FiscalDashboardPanel';
 import { AssistantChat } from '../components/AssistantChat';
 import { LandingHero } from '../components/LandingHero';
+import { GettingStarted } from './GettingStarted';
 import { FacturiaStore } from '../lib/mockStore';
 import { MatchingEngineService } from '../lib/MatchingEngineService';
-import { BankTransaction, CfdiRecord, Profile } from '../lib/types';
+import { BankTransaction, CfdiRecord, Profile, ReconciliationStatus } from '../lib/types';
 import { SEED_PROFILE, SEED_TRANSACTIONS, SEED_CFDIS } from '../lib/seed';
 import {
   Shield,
   RotateCcw,
-  Zap,
   LayoutDashboard,
   Receipt,
   Bot,
@@ -34,8 +34,16 @@ type Snapshot = { profile: Profile; transactions: BankTransaction[]; cfdis: Cfdi
 export default function FacturiaDashboard({ mode = 'demo', initialSnapshot }: { mode?: 'demo' | 'workspace'; initialSnapshot?: Snapshot }) {
   const isDemo = mode === 'demo';
   const [operationError, setOperationError] = useState('');
+  const [operationNotice, setOperationNotice] = useState('');
   const [viewMode, setViewMode] = useState<'app' | 'landing'>('app');
   const [activeTab, setActiveTab] = useState<'panel' | 'facturas' | 'asistente'>('panel');
+  const [navigation, setNavigation] = useState<{filter: 'all' | ReconciliationStatus; section: 'movements' | 'documents'; request: number}>({filter: 'all', section: 'movements', request: 0});
+  const [uploadFocus, setUploadFocus] = useState<'document-upload' | 'bank-upload' | null>(null);
+  const [uploadTargetId, setUploadTargetId] = useState<string | null>(null);
+  const [demoRevision, setDemoRevision] = useState(0);
+  const shellRef = useRef<HTMLElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
+  const lastSnapshot = useRef<Snapshot | null>(initialSnapshot ?? null);
 
   const [profile, setProfile] = useState<Profile>(initialSnapshot?.profile || SEED_PROFILE);
   const [transactions, setTransactions] = useState<BankTransaction[]>(() =>
@@ -60,8 +68,21 @@ export default function FacturiaDashboard({ mode = 'demo', initialSnapshot }: { 
     setProfile(p); setTransactions(evaluated); setCfdis(c);
   }, [isDemo]);
 
+  useEffect(() => {
+    const shell = shellRef.current;
+    const header = headerRef.current;
+    if (!shell || !header) return;
+    const updateOffset = () => shell.style.setProperty('--facturia-header-offset', `${window.matchMedia('(min-width: 640px)').matches ? header.getBoundingClientRect().height + 16 : 16}px`);
+    updateOffset();
+    const observer = new ResizeObserver(updateOffset);
+    observer.observe(header);
+    window.addEventListener('resize', updateOffset);
+    return () => {observer.disconnect(); window.removeEventListener('resize', updateOffset);};
+  }, [viewMode]);
+
   const metrics = MatchingEngineService.calculateCashFlowShieldMetrics(transactions, cfdis);
   const applySnapshot = (data: Snapshot) => {
+    lastSnapshot.current = data;
     setProfile(data.profile); setTransactions(data.transactions); setCfdis(data.cfdis);
   };
   const provisionalRequests = useRef(new WeakMap<File, {fingerprint: string; key: string}>());
@@ -70,6 +91,7 @@ export default function FacturiaDashboard({ mode = 'demo', initialSnapshot }: { 
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'No se pudo guardar el cambio');
     applySnapshot(data);
+    return data as Snapshot;
   };
   const handleProvisionalAdded = async (document: CfdiRecord, _source: 'pdf' | 'image', file: File) => {
     const fields = manualDocumentSchema.parse(document);
@@ -92,39 +114,69 @@ export default function FacturiaDashboard({ mode = 'demo', initialSnapshot }: { 
       return;
     }
     const {updatedTransactions, updatedCfdis} = FacturiaStore.addCfdi(newCfdi);
+    lastSnapshot.current = {profile, transactions: updatedTransactions, cfdis: updatedCfdis};
     setCfdis(updatedCfdis); setTransactions(updatedTransactions);
   };
   const handleTransactionsImported = async (newTransactions: BankTransaction[]) => {
     if (!isDemo) { await workspaceAction({action: 'transactions', transactions: newTransactions}); return; }
     const {updatedTransactions, updatedCfdis} = FacturiaStore.addTransactions(newTransactions);
+    lastSnapshot.current = {profile, transactions: updatedTransactions, cfdis: updatedCfdis};
     setTransactions(updatedTransactions); setCfdis(updatedCfdis);
   };
   const handleResolveAmbiguous = async (txId: string, selectedCfdiId: string) => {
     try {
       setOperationError('');
+      setOperationNotice('');
       if (isDemo) setTransactions(FacturiaStore.resolveAmbiguous(txId, selectedCfdiId));
       else await workspaceAction({action: 'resolve', transactionId: txId, cfdiId: selectedCfdiId});
       setSelectedAmbiguousTx(null);
-    } catch (error) { setOperationError(error instanceof Error ? error.message : 'No se pudo conciliar'); }
+      setOperationNotice('Documento vinculado. Puedes abrirlo o quitar la relación desde el movimiento.');
+    } catch (error) { setOperationError(error instanceof Error ? error.message : 'No se pudo guardar la relación. Intenta de nuevo.'); throw error; }
   };
   const handleUnmatch = async (txId: string) => {
     try {
       setOperationError('');
+      setOperationNotice('');
       if (isDemo) setTransactions(FacturiaStore.unmatchTransaction(txId));
       else await workspaceAction({action: 'unmatch', transactionId: txId});
-    } catch (error) { setOperationError(error instanceof Error ? error.message : 'No se pudo desvincular'); }
+      setOperationNotice('Se quitó la relación, sin borrar el documento ni el movimiento. La búsqueda quedó pausada; usa «Volver a buscar» para reactivarla.');
+    } catch (error) { setOperationError(error instanceof Error ? error.message : 'No se pudo quitar la relación. Intenta de nuevo.'); throw error; }
   };
   const handleResumeReconciliation = async (txId: string) => {
     try {
       setOperationError('');
+      setOperationNotice('');
       if (isDemo) setTransactions(FacturiaStore.resumeReconciliation(txId));
       else await workspaceAction({action: 'resumeReconciliation', transactionId: txId});
-    } catch (error) { setOperationError(error instanceof Error ? error.message : 'No se pudo reanudar la conciliación'); }
+      setOperationNotice('La búsqueda se reactivó. Revisa el resultado junto al movimiento.');
+    } catch (error) { setOperationError(error instanceof Error ? error.message : 'No se pudo volver a buscar. Intenta de nuevo.'); throw error; }
   };
   const handleResetToSeed = () => {
     const {transactions: t, cfdis: c} = FacturiaStore.resetToSeed();
     const evaluated = MatchingEngineService.evaluateBatch(t, c, SEED_PROFILE);
+    lastSnapshot.current = {profile: SEED_PROFILE, transactions: evaluated, cfdis: c};
     FacturiaStore.saveTransactions(evaluated); setProfile(SEED_PROFILE); setTransactions(evaluated); setCfdis(c);
+    setDemoRevision(previous => previous + 1);
+    setUploadTargetId(null); setOperationError(''); setOperationNotice('Se restablecieron los datos de ejemplo.');
+  };
+
+  const openRecords = (section: 'movements' | 'documents', filter: 'all' | ReconciliationStatus = 'all') => {
+    setUploadFocus(null); setActiveTab('facturas');
+    setNavigation(previous => ({section, filter, request: previous.request + 1}));
+  };
+  const openUpload = (kind: 'document-upload' | 'bank-upload', target?: BankTransaction) => {
+    setUploadTargetId(target?.id ?? null); setUploadFocus(kind); setActiveTab('facturas');
+    setNavigation(previous => ({section: kind === 'document-upload' ? 'documents' : 'movements', filter: 'all', request: previous.request + 1}));
+  };
+  useEffect(() => {
+    if (activeTab !== 'facturas' || !uploadFocus) return;
+    const section = document.getElementById(uploadFocus);
+    section?.focus(); section?.scrollIntoView({block: 'start', behavior: 'auto'});
+  }, [activeTab, uploadFocus, navigation.request]);
+  const uploadTarget = transactions.find(transaction => transaction.id === uploadTargetId);
+  const openImportedDocument = (document: CfdiRecord) => {
+    const saved = (lastSnapshot.current?.cfdis ?? cfdis).find(record => record.userId === profile.id && record.uuidSat && record.uuidSat.toUpperCase() === document.uuidSat.toUpperCase());
+    if (saved) setSelectedCfdi(saved);
   };
 
   // Candidatos para la transacción ambigua seleccionada
@@ -144,10 +196,10 @@ export default function FacturiaDashboard({ mode = 'demo', initialSnapshot }: { 
   }
 
   return (
-    <main className="min-h-screen bg-[oklch(0.16_0.02_260)] text-[oklch(0.97_0.01_240)] antialiased font-inter">
+    <main ref={shellRef} className="facturia-app min-h-screen bg-[oklch(0.16_0.02_260)] text-[oklch(0.97_0.01_240)] antialiased font-inter">
       {/* Header Estilo Shell de la Referencia */}
-      <header className="sticky top-0 z-40 w-full border-b border-[oklch(0.30_0.03_260)] bg-[oklch(0.16_0.02_260)]/85 backdrop-blur-md">
-        <div className="max-w-[1180px] mx-auto px-4 sm:px-6 h-18 flex items-center justify-between flex-wrap gap-3 py-3">
+      <header ref={headerRef} className="sm:sticky top-0 z-40 w-full border-b border-[oklch(0.30_0.03_260)] bg-[oklch(0.16_0.02_260)]/85 backdrop-blur-md">
+        <div className="max-w-[1180px] mx-auto px-4 sm:px-6 flex items-center justify-between flex-wrap gap-3 py-3">
           {/* Brand */}
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-linear-to-tr from-[oklch(0.78_0.15_195)] to-[oklch(0.65_0.20_295)] flex items-center justify-center text-[oklch(0.15_0.03_260)] shadow-glow">
@@ -158,15 +210,16 @@ export default function FacturiaDashboard({ mode = 'demo', initialSnapshot }: { 
                 Factur<span className="text-[oklch(0.78_0.15_195)]">IA</span>
               </div>
               <div className="text-[11px] text-[oklch(0.68_0.03_250)] mt-0.5">
-                {isDemo ? 'Demostración · datos de ejemplo' : 'Mi espacio · datos persistentes'}
+                {isDemo ? 'Datos de ejemplo' : 'Tus registros, guardados en tu cuenta'}
               </div>
             </div>
           </div>
 
           {/* Navegación por Tabs principales */}
-          <nav className="flex items-center bg-[oklch(0.21_0.025_260)] p-1 rounded-xl border border-[oklch(0.30_0.03_260)]">
+          <nav aria-label="Secciones de FacturIA" className="flex flex-wrap items-center bg-[oklch(0.21_0.025_260)] p-1 rounded-xl border border-[oklch(0.30_0.03_260)]">
             <button
               onClick={() => setActiveTab('panel')}
+              aria-pressed={activeTab === 'panel'}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
                 activeTab === 'panel'
                   ? 'bg-linear-to-r from-[oklch(0.78_0.15_195)] to-[oklch(0.65_0.20_295)] text-[oklch(0.15_0.03_260)] shadow-xs'
@@ -174,11 +227,12 @@ export default function FacturiaDashboard({ mode = 'demo', initialSnapshot }: { 
               }`}
             >
               <LayoutDashboard className="w-3.5 h-3.5" />
-              Panel
+              Inicio
             </button>
 
             <button
-              onClick={() => setActiveTab('facturas')}
+              onClick={() => openRecords('movements')}
+              aria-pressed={activeTab === 'facturas'}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
                 activeTab === 'facturas'
                   ? 'bg-linear-to-r from-[oklch(0.78_0.15_195)] to-[oklch(0.65_0.20_295)] text-[oklch(0.15_0.03_260)] shadow-xs'
@@ -186,11 +240,12 @@ export default function FacturiaDashboard({ mode = 'demo', initialSnapshot }: { 
               }`}
             >
               <Receipt className="w-3.5 h-3.5" />
-              Facturas & Tesorería
+              Movimientos y documentos
             </button>
 
             <button
               onClick={() => setActiveTab('asistente')}
+              aria-pressed={activeTab === 'asistente'}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
                 activeTab === 'asistente'
                   ? 'bg-linear-to-r from-[oklch(0.78_0.15_195)] to-[oklch(0.65_0.20_295)] text-[oklch(0.15_0.03_260)] shadow-xs'
@@ -198,12 +253,12 @@ export default function FacturiaDashboard({ mode = 'demo', initialSnapshot }: { 
               }`}
             >
               <Bot className="w-3.5 h-3.5" />
-              Asistente
+              Ayuda
             </button>
           </nav>
 
           {/* User Chip & Acciones */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 max-w-full">
             <div className="flex items-center gap-2 bg-[oklch(0.21_0.025_260)] border border-[oklch(0.30_0.03_260)] px-3 py-1.5 rounded-full text-xs">
               <div className="w-6 h-6 rounded-full bg-linear-to-r from-[oklch(0.78_0.15_195)] to-[oklch(0.65_0.20_295)] flex items-center justify-center font-bold text-[10px] text-[oklch(0.15_0.03_260)]">
                 {profile.businessName.slice(0, 2).toUpperCase()}
@@ -218,11 +273,11 @@ export default function FacturiaDashboard({ mode = 'demo', initialSnapshot }: { 
 
             <button
               onClick={() => setViewMode('landing')}
-              title="Ver Landing Page informativa"
+              title="Acerca de FacturIA"
               className="p-2 rounded-xl border border-[oklch(0.30_0.03_260)] hover:bg-[oklch(0.24_0.028_260)] text-[oklch(0.68_0.03_250)] hover:text-white text-xs transition-colors flex items-center gap-1"
             >
               <Globe className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Landing</span>
+              <span>Acerca de FacturIA</span>
             </button>
 
             {isDemo && <button
@@ -231,50 +286,44 @@ export default function FacturiaDashboard({ mode = 'demo', initialSnapshot }: { 
               className="p-2 rounded-xl border border-[oklch(0.30_0.03_260)] hover:bg-[oklch(0.24_0.028_260)] text-[oklch(0.68_0.03_250)] hover:text-white text-xs transition-colors flex items-center gap-1"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Reset demo</span>
+              <span>Reiniciar ejemplos</span>
             </button>}
-            <Link href={isDemo ? "/workspace" : "/demo"} className="text-xs underline">{isDemo ? "Mi espacio" : "Demo"}</Link>
+            <Link href={isDemo ? "/workspace" : "/demo"} className="text-sm underline">{isDemo ? "Entrar a mi espacio" : "Probar con ejemplos"}</Link>
           </div>
         </div>
       </header>
 
       {operationError && <p role="alert" className="max-w-[1180px] mx-auto px-6 py-3 text-red-300">{operationError}</p>}
+      {operationNotice && activeTab !== 'facturas' && <p role="status" className="max-w-[1180px] mx-auto px-6 py-3 text-sm text-cyan-100">{operationNotice}</p>}
       {/* Contenedor Principal Shell */}
       <div className="max-w-[1180px] mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
         {/* Banner de Arquitectura Blindada */}
-        <section className="p-3.5 rounded-2xl border border-[oklch(0.78_0.15_195/0.3)] bg-[oklch(0.78_0.15_195/0.08)] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs text-[oklch(0.97_0.01_240)]">
-          <div className="flex items-center gap-2">
-            <Zap className="w-4 h-4 text-[oklch(0.78_0.15_195)] shrink-0" />
-            <span>
-              <strong>{isDemo ? "Modo demostración:" : "Conciliación documental:"}</strong> XML y CSV con reglas; PDF/OCR con revisión e IA local opcional. {isDemo ? 'Los estados SAT/EFOS de la demo son ejemplos.' : 'Consulta el estado oficial SAT desde el detalle de cada XML.'}
-            </span>
-          </div>
-          <div className="flex items-center gap-2 text-[11px] font-mono shrink-0">
-            <span className="px-2 py-0.5 rounded bg-[oklch(0.72_0.17_155/0.2)] text-[oklch(0.72_0.17_155)]">
-              XML: 0 Tokens
-            </span>
-            <span className="px-2 py-0.5 rounded bg-[oklch(0.65_0.20_295/0.2)] text-purple-300">
-              {isDemo ? 'SAT: ejemplo' : 'SAT: consulta por XML'}
-            </span>
-          </div>
+        <section aria-label={isDemo ? 'Estás usando datos de ejemplo' : 'Estás usando tu espacio personal'} className="p-4 rounded-xl border border-slate-700 bg-slate-900/60 text-sm text-slate-300">
+          <strong className="text-white">{isDemo ? 'Estás probando con datos de ejemplo.' : 'Estás en tu espacio personal.'}</strong>{' '}
+          {isDemo ? 'Los cambios de esta demo se guardan sólo en este navegador. Los estados del SAT y las alertas de proveedores son ejemplos.' : 'Los documentos y movimientos se guardan en tu cuenta. Cargar una factura y consultar su estado en el SAT son pasos distintos.'}
         </section>
-
-        <WorkspaceExportControls mode={mode} snapshot={{profile, transactions, cfdis}} />
-        {!isDemo && <WorkspaceRestoreControls profile={profile} occupied={transactions.length > 0 || cfdis.length > 0} onRestored={applySnapshot} />}
 
         {/* ==================== TAB 1: PANEL ==================== */}
         {activeTab === 'panel' && (
           <div className="space-y-6 animate-fade-in">
+            <GettingStarted transactions={transactions} documents={cfdis} demoMode={isDemo}
+              onAddDocuments={() => openUpload('document-upload')}
+              onAddMovements={() => openUpload('bank-upload')}
+              onReview={filter => openRecords('movements', filter)} />
             <FiscalDashboardPanel
               metrics={metrics}
               cfdis={cfdis}
               transactions={transactions}
-              onGoToFacturas={() => setActiveTab('facturas')}
+              profileRfc={profile.rfc}
+              onGoToFacturas={() => openRecords('documents')}
+              onReviewDocuments={() => openRecords('documents')}
+              onReviewMovements={filter => openRecords('movements', filter)}
+              onAddMovements={() => openUpload('bank-upload')}
             />
 
             {/* Escudo de Flujo de Caja dentro del Panel */}
             <div className="pt-2">
-              <CashFlowShield metrics={metrics} />
+              <CashFlowShield metrics={metrics} transactions={transactions} onReviewMovements={filter => openRecords('movements', filter)} />
             </div>
           </div>
         )}
@@ -283,13 +332,13 @@ export default function FacturiaDashboard({ mode = 'demo', initialSnapshot }: { 
         {activeTab === 'facturas' && (
           <div className="space-y-6 animate-fade-in">
             {/* Botón directo de Registrar Factura */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <h1 className="font-sora font-bold text-xl text-white">
-                  Tesorería & Comprobantes Fiscales
+                  Movimientos y documentos
                 </h1>
                 <p className="text-xs text-[oklch(0.68_0.03_250)]">
-                  Conciliación determinista en tiempo real clasificada en 3 estados
+                  Revisa qué documento corresponde a cada entrada o salida de dinero.
                 </p>
               </div>
 
@@ -298,25 +347,36 @@ export default function FacturiaDashboard({ mode = 'demo', initialSnapshot }: { 
                 className="px-4 py-2.5 rounded-xl bg-linear-to-r from-[oklch(0.78_0.15_195)] to-[oklch(0.65_0.20_295)] text-[oklch(0.15_0.03_260)] text-xs font-sora font-bold shadow-glow flex items-center gap-2 hover:brightness-105 transition-all"
               >
                 <Plus className="w-4 h-4" />
-                Registrar Factura
+                Anotar un gasto sin factura
               </button>
             </div>
 
             {/* Dropzone Unificado */}
-            <UnifiedDropzone userId={profile.id} rfcReceptor={profile.rfc} demoMode={isDemo} onCfdiAdded={handleCfdiAdded} onProvisionalAdded={isDemo ? undefined : handleProvisionalAdded} />
-            <BankCsvImport userId={profile.id} accountId="cuenta-csv-01" onTransactionsImported={handleTransactionsImported} />
+            <section id="document-upload" tabIndex={-1} className="scroll-mt-48 rounded-xl" aria-label="Agregar documentos">
+              {uploadTarget && <div className="mb-4 rounded-xl border border-slate-600 p-4 space-y-2 text-sm" role="status">
+                <h2 className="font-semibold text-white">Documento para este movimiento</h2>
+                <p>{uploadTarget.description} · {uploadTarget.date} · {new Intl.NumberFormat('es-MX', {style: 'currency', currency: uploadTarget.currency, currencyDisplay: 'code'}).format(Math.abs(uploadTarget.amount))}</p>
+                <p className="text-slate-300">{uploadTarget.status === 'conciliado' ? 'Este movimiento ya tiene un documento vinculado. Puedes abrirlo desde la lista.' : uploadTarget.status === 'ambiguo' ? 'Hay una coincidencia que debes revisar. Abre el movimiento para comparar los documentos.' : uploadTarget.reconciliationLocked ? 'La búsqueda está pausada. Después de cargar el documento, usa «Volver a buscar» en el movimiento.' : 'Agrega el XML que podría corresponder. Al guardarlo se compararán sus datos; cargarlo no garantiza una coincidencia.'}</p>
+                <div className="flex flex-wrap gap-4"><button type="button" className="underline text-cyan-200" onClick={() => openRecords('movements')}>Ver resultado en movimientos</button><button type="button" className="underline text-slate-300" onClick={() => setUploadTargetId(null)}>Quitar este contexto</button></div>
+              </div>}
+              <UnifiedDropzone key={`documents-${demoRevision}`} userId={profile.id} rfcReceptor={profile.rfc} demoMode={isDemo} onCfdiAdded={handleCfdiAdded} onCfdiOpened={openImportedDocument} onProvisionalAdded={isDemo ? undefined : handleProvisionalAdded} />
+            </section>
+            <section id="bank-upload" tabIndex={-1} className="scroll-mt-48 rounded-xl" aria-label="Agregar movimientos del banco"><BankCsvImport key={`bank-${demoRevision}`} userId={profile.id} accountId="cuenta-csv-01" onTransactionsImported={handleTransactionsImported} /></section>
 
             {/* Inbox de Tesorería Unificado */}
             <TreasuryInbox
+              key={`list-${navigation.request}`}
+              initialFilter={navigation.filter}
+              focusSection={uploadFocus ? undefined : navigation.section}
+              profileRfc={profile.rfc}
+              notice={operationNotice}
               transactions={transactions}
               cfdis={cfdis}
               onOpenResolver={(tx) => setSelectedAmbiguousTx(tx)}
               onOpenCfdiDetail={(cfdi) => setSelectedCfdi(cfdi)}
               onUnmatch={handleUnmatch}
               onResumeReconciliation={handleResumeReconciliation}
-              onRequestUploadForDiscrepancy={() => {
-                window.scrollTo({ top: 120, behavior: 'smooth' });
-              }}
+              onRequestUploadForDiscrepancy={transaction => openUpload('document-upload', transaction)}
               onOpenRegisterModal={() => setIsRegisterModalOpen(true)}
             />
           </div>
@@ -327,10 +387,10 @@ export default function FacturiaDashboard({ mode = 'demo', initialSnapshot }: { 
           <div className="space-y-4 animate-fade-in">
             <div>
               <h1 className="font-sora font-bold text-xl text-white">
-                Asistente de tus movimientos
+                Ayuda para entender tus registros
               </h1>
               <p className="text-xs text-[oklch(0.68_0.03_250)]">
-                Resúmenes basados en los documentos y movimientos registrados
+                Consulta qué necesita tu atención y cómo revisar un movimiento.
               </p>
             </div>
 
@@ -341,6 +401,12 @@ export default function FacturiaDashboard({ mode = 'demo', initialSnapshot }: { 
             />
           </div>
         )}
+        <details className="rounded-xl border border-slate-700 p-4 space-y-4">
+          <summary className="cursor-pointer font-semibold text-base text-white">Descargar y recuperar mis registros</summary>
+          <div className="mt-4 space-y-4"><WorkspaceExportControls mode={mode} snapshot={{profile, transactions, cfdis}} />
+            {!isDemo && <WorkspaceRestoreControls profile={profile} occupied={transactions.length > 0 || cfdis.length > 0} onRestored={applySnapshot} />}
+          </div>
+        </details>
       </div>
 
       {/* Modal para Registrar Factura con deducción LISR */}

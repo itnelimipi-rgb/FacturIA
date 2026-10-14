@@ -1,379 +1,156 @@
 'use client';
 
-import React, { useState } from 'react';
-import { BankTransaction, CfdiRecord, ReconciliationStatus } from '../lib/types';
-import { documentTypeLabel, formatDeclaredAmount } from '../lib/documentSummary';
-import {
-  CheckCircle2,
-  HelpCircle,
-  AlertOctagon,
-  ArrowUpRight,
-  ArrowDownLeft,
-  FileCheck2,
-  ExternalLink,
-  ShieldAlert,
-  Unlink,
-  Search,
-  Plus
-} from 'lucide-react';
+import React, { useEffect, useId, useRef, useState } from 'react';
+import type { BankTransaction, CfdiRecord, ReconciliationStatus } from '../lib/types';
+import { formatDeclaredAmount } from '../lib/documentSummary';
+import { documentCardLabel, reconciliationExplanation, reconciliationLabels } from '../lib/reconciliationPresentation';
+import { CheckCircle2, HelpCircle, FileText, ArrowDownLeft, ArrowUpRight, ExternalLink, Search, Plus, Unlink } from 'lucide-react';
 
 interface TreasuryInboxProps {
   transactions: BankTransaction[];
   cfdis: CfdiRecord[];
   onOpenResolver: (tx: BankTransaction) => void;
   onOpenCfdiDetail: (cfdi: CfdiRecord) => void;
-  onUnmatch: (txId: string) => void;
+  onUnmatch: (txId: string) => void | Promise<void>;
   onResumeReconciliation?: (txId: string) => void | Promise<void>;
   onRequestUploadForDiscrepancy: (tx: BankTransaction) => void;
   onOpenRegisterModal?: () => void;
+  initialFilter?: 'all' | ReconciliationStatus;
+  focusSection?: 'movements' | 'documents';
+  profileRfc?: string;
+  notice?: string;
 }
 
-export const TreasuryInbox: React.FC<TreasuryInboxProps> = ({
-  transactions,
-  cfdis,
-  onOpenResolver,
-  onOpenCfdiDetail,
-  onUnmatch,
-  onResumeReconciliation,
-  onRequestUploadForDiscrepancy,
-  onOpenRegisterModal
-}) => {
-  const [activeTab, setActiveTab] = useState<'all' | ReconciliationStatus>('all');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [pendingResumeId, setPendingResumeId] = useState<string | null>(null);
-  const [resumeError, setResumeError] = useState('');
+const money = (value: number, currency: string) => new Intl.NumberFormat('es-MX', {
+  style: 'currency', currency, currencyDisplay: 'code', minimumFractionDigits: 2,
+}).format(Math.abs(value));
 
-  const resumeReconciliation = async (transactionId: string) => {
-    if (!onResumeReconciliation || pendingResumeId) return;
-    setPendingResumeId(transactionId);
-    setResumeError('');
+export const TreasuryInbox: React.FC<TreasuryInboxProps> = ({
+  transactions, cfdis, onOpenResolver, onOpenCfdiDetail, onUnmatch, onResumeReconciliation,
+  onRequestUploadForDiscrepancy, onOpenRegisterModal, initialFilter = 'all', focusSection, profileRfc, notice,
+}) => {
+  const [activeTab, setActiveTab] = useState<'all' | ReconciliationStatus>(initialFilter);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [pendingAction, setPendingAction] = useState<{id: string; kind: 'unmatch' | 'resume'} | null>(null);
+  const [actionError, setActionError] = useState<{id: string; message: string} | null>(null);
+  const pendingRef = useRef(false);
+  const returnActionFocus = useRef(false);
+  const movementsRef = useRef<HTMLElement>(null);
+  const documentsRef = useRef<HTMLElement>(null);
+  const searchId = useId();
+
+  useEffect(() => {
+    if (!focusSection) return;
+    const section = focusSection === 'movements' ? movementsRef.current : documentsRef.current;
+    section?.focus({preventScroll: true});
+    section?.scrollIntoView({block: 'start', behavior: 'auto'});
+  }, [focusSection]);
+
+  useEffect(() => {
+    if (!pendingAction && returnActionFocus.current) {
+      returnActionFocus.current = false;
+      if (document.activeElement === document.body) {
+        movementsRef.current?.focus({preventScroll: true});
+        movementsRef.current?.scrollIntoView({block: 'start', behavior: 'auto'});
+      }
+    }
+  }, [pendingAction]);
+
+  const runAction = async (id: string, kind: 'unmatch' | 'resume') => {
+    if (pendingRef.current || (kind === 'resume' && !onResumeReconciliation)) return;
+    pendingRef.current = true;
+    setPendingAction({id, kind});
+    setActionError(null);
     try {
-      await onResumeReconciliation(transactionId);
-    } catch (error) {
-      setResumeError(error instanceof Error ? error.message : 'No se pudo reactivar la búsqueda. Intenta nuevamente.');
+      if (kind === 'resume') await onResumeReconciliation?.(id);
+      else await onUnmatch(id);
+    } catch (reason) {
+      setActionError({id, message: reason instanceof Error ? reason.message : 'No se pudo guardar el cambio. Inténtalo de nuevo.'});
     } finally {
-      setPendingResumeId(null);
+      pendingRef.current = false;
+      returnActionFocus.current = true;
+      setPendingAction(null);
     }
   };
 
-  const cfdiMap = new Map<string, CfdiRecord>(cfdis.map((c) => [c.id, c]));
+  const documents = new Map(cfdis.map(document => [document.id, document]));
+  const filteredTransactions = transactions.filter(transaction => activeTab === 'all' || transaction.status === activeTab).filter(transaction => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return true;
+    const linkedDocument = transaction.matchedCfdiId ? documents.get(transaction.matchedCfdiId) : undefined;
+    return [transaction.description, transaction.amount.toString(), transaction.date, linkedDocument?.rfcEmisor ?? '', linkedDocument?.nombreEmisor ?? ''].some(value => value.toLowerCase().includes(term));
+  });
+  const filters: Array<'all' | ReconciliationStatus> = ['all', 'conciliado', 'ambiguo', 'discrepancia'];
 
-  const conciliados = transactions.filter((t) => t.status === 'conciliado');
-  const ambiguos = transactions.filter((t) => t.status === 'ambiguo');
-  const discrepancias = transactions.filter((t) => t.status === 'discrepancia');
-
-  const filteredTransactions = transactions
-    .filter((t) => (activeTab === 'all' ? true : t.status === activeTab))
-    .filter((t) => {
-      if (!searchTerm) return true;
-      const term = searchTerm.toLowerCase();
-      return (
-        t.description.toLowerCase().includes(term) ||
-        t.amount.toString().includes(term) ||
-        t.date.includes(term) ||
-        (t.matchedCfdiId && cfdiMap.get(t.matchedCfdiId)?.rfcEmisor.toLowerCase().includes(term))
-      );
-    });
-
-  const formatCurrency = (val: number, currency: string) => {
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency,
-      currencyDisplay: 'code',
-      minimumFractionDigits: 2
-    }).format(Math.abs(val));
-  };
-
-  return (
-    <div className="w-full space-y-4">
-      {resumeError && <p role="alert" className="text-xs text-rose-300 rounded-xl border border-rose-800 bg-rose-950/30 p-3">{resumeError}</p>}
-      {/* Barra de Acciones y Pestañas */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[oklch(0.30_0.03_260)] pb-4">
-        {/* Pestañas de Estados */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none bg-[oklch(0.18_0.02_260)] p-1 rounded-xl border border-[oklch(0.30_0.03_260)]">
-          <button
-            onClick={() => setActiveTab('all')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-              activeTab === 'all'
-                ? 'bg-linear-to-r from-[oklch(0.78_0.15_195)] to-[oklch(0.65_0.20_295)] text-[oklch(0.15_0.03_260)] shadow-xs'
-                : 'text-[oklch(0.68_0.03_250)] hover:text-white'
-            }`}
-          >
-            Todos
-            <span className="text-[10px] opacity-80">({transactions.length})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('conciliado')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-              activeTab === 'conciliado'
-                ? 'bg-[oklch(0.72_0.17_155)] text-[oklch(0.12_0.03_165)] shadow-xs'
-                : 'text-[oklch(0.72_0.17_155)] hover:bg-[oklch(0.72_0.17_155/0.1)]'
-            }`}
-          >
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            Conciliados
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/30 font-mono font-bold">
-              {conciliados.length}
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('ambiguo')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-              activeTab === 'ambiguo'
-                ? 'bg-[oklch(0.80_0.16_75)] text-black shadow-xs'
-                : 'text-[oklch(0.80_0.16_75)] hover:bg-[oklch(0.80_0.16_75/0.1)]'
-            }`}
-          >
-            <HelpCircle className="w-3.5 h-3.5" />
-            Ambiguos
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/30 font-mono font-bold">
-              {ambiguos.length}
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('discrepancia')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-              activeTab === 'discrepancia'
-                ? 'bg-[oklch(0.65_0.22_25)] text-white shadow-xs'
-                : 'text-rose-400 hover:bg-rose-950/40'
-            }`}
-          >
-            <AlertOctagon className="w-3.5 h-3.5" />
-            Discrepancias
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/30 font-mono font-bold">
-              {discrepancias.length}
-            </span>
-          </button>
+  return <div className="w-full space-y-7">
+    <section id="workspace-movements" ref={movementsRef} tabIndex={-1} aria-labelledby="workspace-movements-title" className="space-y-4 scroll-mt-24 rounded-xl focus-visible:outline-2 focus-visible:outline-teal-300 focus-visible:outline-offset-4">
+      {notice && <p role="status" className="rounded-xl border border-teal-800 bg-teal-950/30 p-4 text-sm text-teal-100">{notice}</p>}
+      <div>
+        <h2 id="workspace-movements-title" className="font-sora text-lg font-bold text-white">Movimientos del banco ({transactions.length})</h2>
+        <p className="mt-1 text-sm text-slate-300">Son las entradas y salidas que cargaste desde un archivo. Vincular un documento ayuda a explicar un movimiento; no confirma su estado ante el SAT.</p>
+      </div>
+      <div className="space-y-3 border-b border-slate-700 pb-4">
+        <div role="group" aria-label="Filtrar movimientos por vínculo con un documento" className="flex flex-wrap gap-2">
+          {filters.map(filter => <button key={filter} type="button" aria-pressed={activeTab === filter} onClick={() => setActiveTab(filter)} className={`min-h-11 rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${activeTab === filter ? 'border-teal-300 bg-teal-300 text-slate-950' : 'border-slate-600 text-slate-200 hover:bg-slate-800'}`}>
+            {filter === 'all' ? 'Todos' : reconciliationLabels[filter]} <span className="font-mono">({filter === 'all' ? transactions.length : transactions.filter(transaction => transaction.status === filter).length})</span>
+          </button>)}
         </div>
-
-        {/* Buscador + Botón Registrar */}
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <div className="relative flex-1 sm:w-60">
-            <Search className="w-3.5 h-3.5 text-[oklch(0.68_0.03_250)] absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Buscar concepto o monto..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-[oklch(0.30_0.03_260)] bg-[oklch(0.21_0.025_260)] text-white placeholder:text-[oklch(0.68_0.03_250)] focus:outline-hidden focus:border-[oklch(0.78_0.15_195)]"
-            />
-          </div>
-
-          {onOpenRegisterModal && (
-            <button
-              onClick={onOpenRegisterModal}
-              className="px-3 py-1.5 rounded-xl bg-linear-to-r from-[oklch(0.78_0.15_195)] to-[oklch(0.65_0.20_295)] text-[oklch(0.15_0.03_260)] text-xs font-bold font-sora shadow-glow flex items-center gap-1.5 hover:brightness-105 transition-all shrink-0"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Registrar gasto</span>
-            </button>
-          )}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <label htmlFor={searchId} className="min-w-0 flex-1 text-sm text-slate-300">Buscar un movimiento
+            <span className="relative mt-1 block"><Search aria-hidden="true" className="absolute left-3 top-3 h-4 w-4 text-slate-400" /><input id={searchId} type="search" placeholder="Descripción, importe, fecha o emisor" value={searchTerm} onChange={event => setSearchTerm(event.target.value)} className="min-h-11 w-full rounded-xl border border-slate-600 bg-slate-900 py-2 pl-10 pr-3 text-sm text-white placeholder:text-slate-400" /></span>
+          </label>
+          {onOpenRegisterModal && <button type="button" onClick={onOpenRegisterModal} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-600 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800"><Plus aria-hidden="true" className="h-4 w-4" />Anotar un gasto sin factura</button>}
         </div>
       </div>
 
-      {/* Lista Dinámica de Movimientos */}
-      <div className="space-y-3">
-        {filteredTransactions.length === 0 ? (
-          <div className="p-10 text-center rounded-2xl border border-dashed border-[oklch(0.30_0.03_260)] bg-[oklch(0.18_0.02_260)] text-[oklch(0.68_0.03_250)] text-xs">
-            No hay movimientos en este criterio
+      {filteredTransactions.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-600 bg-slate-900/40 p-6 text-sm text-slate-300">
+        {transactions.length === 0 ? <><h3 className="font-semibold text-white">Aún no cargaste movimientos</h3><p className="mt-1">Agrega un archivo de movimientos bancarios para ver las entradas y salidas aquí. Puedes cargar documentos antes o después.</p></> : searchTerm.trim() ? <><h3 className="font-semibold text-white">No encontramos movimientos con esa búsqueda</h3><p className="mt-1">Prueba otra descripción, importe o fecha.</p><button type="button" onClick={() => setSearchTerm('')} className="mt-3 min-h-11 rounded-lg border border-slate-600 px-3 py-2 text-white hover:bg-slate-800">Limpiar búsqueda</button></> : <><h3 className="font-semibold text-white">No hay movimientos en este filtro</h3><p className="mt-1">Los demás movimientos siguen disponibles.</p><button type="button" onClick={() => setActiveTab('all')} className="mt-3 min-h-11 rounded-lg border border-slate-600 px-3 py-2 text-white hover:bg-slate-800">Ver todos los movimientos</button></>}
+      </div> : <div className="space-y-3">{filteredTransactions.map(transaction => {
+        const linkedDocument = transaction.matchedCfdiId ? documents.get(transaction.matchedCfdiId) : undefined;
+        const isEntry = transaction.amount > 0;
+        const pending = pendingAction?.id === transaction.id;
+        return <article key={transaction.id} className="rounded-2xl border border-slate-600 bg-slate-900/50 p-4 sm:p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:justify-between">
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="flex flex-wrap items-center gap-2"><h3 className="break-words text-sm font-semibold text-white">{transaction.description}</h3><span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${transaction.status === 'conciliado' ? 'border-emerald-800 bg-emerald-950/40 text-emerald-200' : transaction.status === 'ambiguo' ? 'border-amber-800 bg-amber-950/30 text-amber-200' : 'border-slate-600 bg-slate-800 text-slate-200'}`}>
+                {transaction.status === 'conciliado' ? <CheckCircle2 aria-hidden="true" className="h-3.5 w-3.5" /> : transaction.status === 'ambiguo' ? <HelpCircle aria-hidden="true" className="h-3.5 w-3.5" /> : <FileText aria-hidden="true" className="h-3.5 w-3.5" />}{reconciliationLabels[transaction.status]}</span></div>
+              <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-300"><span>Fecha: {transaction.date}</span><span className="inline-flex items-center gap-1">{isEntry ? <ArrowDownLeft aria-hidden="true" className="h-4 w-4" /> : <ArrowUpRight aria-hidden="true" className="h-4 w-4" />}{isEntry ? 'Dinero que entró' : 'Dinero que salió'}</span></p>
+              <p className="text-sm leading-relaxed text-slate-300">{reconciliationExplanation(transaction)}</p>
+              {transaction.status === 'conciliado' && linkedDocument && <div className="flex flex-wrap items-center gap-2">
+                <button type="button" onClick={() => onOpenCfdiDetail(linkedDocument)} className="inline-flex min-h-11 max-w-full items-center gap-2 rounded-lg border border-slate-600 px-3 py-2 text-left text-sm text-white hover:bg-slate-800"><FileText aria-hidden="true" className="h-4 w-4 shrink-0" /><span className="min-w-0 break-words">Ver documento · {linkedDocument.nombreEmisor || linkedDocument.rfcEmisor}</span><ExternalLink aria-hidden="true" className="h-3.5 w-3.5 shrink-0" /></button>
+                <button type="button" disabled={pendingAction !== null} aria-busy={pending && pendingAction?.kind === 'unmatch'} onClick={() => void runAction(transaction.id, 'unmatch')} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-50"><Unlink aria-hidden="true" className="h-4 w-4" />{pending && pendingAction?.kind === 'unmatch' ? 'Quitando vínculo…' : 'Quitar vínculo'}</button>
+                {linkedDocument.statusSat === 'no_verificado' && <span className="text-xs text-amber-200">Aún falta consultar su estado ante el SAT</span>}
+              </div>}
+              <details className="text-xs text-slate-400"><summary className="cursor-pointer py-1">Datos del archivo bancario</summary><p className="mt-1 break-all">Identificador de cuenta: {transaction.accountId}</p></details>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 sm:flex-col sm:items-end sm:justify-start">
+              <p className="break-words font-mono text-lg font-bold text-white">{isEntry ? '+' : '-'}{money(transaction.amount, transaction.currency)}</p>
+              {transaction.status === 'ambiguo' && <button type="button" onClick={() => onOpenResolver(transaction)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-amber-200 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-amber-100"><HelpCircle aria-hidden="true" className="h-4 w-4" />Revisar coincidencia</button>}
+              {transaction.reconciliationLocked && onResumeReconciliation && <button type="button" disabled={pendingAction !== null} aria-busy={pending && pendingAction?.kind === 'resume'} onClick={() => void runAction(transaction.id, 'resume')} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-teal-500 px-3 py-2 text-sm font-semibold text-teal-200 hover:bg-slate-800 disabled:opacity-50"><Search aria-hidden="true" className="h-4 w-4" />{pending && pendingAction?.kind === 'resume' ? 'Buscando…' : 'Volver a buscar'}</button>}
+              {transaction.status === 'discrepancia' && !transaction.reconciliationLocked && <button type="button" onClick={() => onRequestUploadForDiscrepancy(transaction)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-teal-500 px-3 py-2 text-sm font-semibold text-teal-200 hover:bg-slate-800"><Plus aria-hidden="true" className="h-4 w-4" />Agregar comprobante</button>}
+            </div>
           </div>
-        ) : (
-          filteredTransactions.map((tx) => {
-            const isIncome = tx.amount > 0;
-            const matchedCfdi = tx.matchedCfdiId ? cfdiMap.get(tx.matchedCfdiId) : null;
+          {actionError?.id === transaction.id && <p role="alert" className="mt-3 rounded-lg border border-rose-800 bg-rose-950/30 p-3 text-sm text-rose-200">{actionError.message} No se confirmó el cambio; puedes volver a intentarlo.</p>}
+        </article>;
+      })}</div>}
+    </section>
 
-            return (
-              <div
-                key={tx.id}
-                className={`p-4 rounded-2xl border transition-all ${
-                  tx.status === 'conciliado'
-                    ? 'bg-[oklch(0.21_0.025_260)] border-[oklch(0.30_0.03_260)] hover:border-[oklch(0.72_0.17_155/0.4)]'
-                    : tx.status === 'ambiguo'
-                    ? 'bg-[oklch(0.80_0.16_75/0.05)] border-[oklch(0.80_0.16_75/0.3)] hover:border-[oklch(0.80_0.16_75/0.6)]'
-                    : 'bg-[oklch(0.65_0.22_25/0.06)] border-[oklch(0.65_0.22_25/0.3)] hover:border-[oklch(0.65_0.22_25/0.6)]'
-                }`}
-              >
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  {/* Icono y Detalles */}
-                  <div className="flex items-start gap-3 flex-1 min-w-0">
-                    <div
-                      className={`p-2.5 rounded-xl shrink-0 mt-0.5 ${
-                        tx.status === 'conciliado'
-                          ? 'bg-[oklch(0.72_0.17_155/0.15)] text-[oklch(0.72_0.17_155)]'
-                          : tx.status === 'ambiguo'
-                          ? 'bg-[oklch(0.80_0.16_75/0.15)] text-[oklch(0.80_0.16_75)]'
-                          : 'bg-[oklch(0.65_0.22_25/0.15)] text-rose-400'
-                      }`}
-                    >
-                      {tx.status === 'conciliado' ? (
-                        <CheckCircle2 className="w-5 h-5" />
-                      ) : tx.status === 'ambiguo' ? (
-                        <HelpCircle className="w-5 h-5" />
-                      ) : (
-                        <AlertOctagon className="w-5 h-5" />
-                      )}
-                    </div>
-
-                    <div className="space-y-1 min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-semibold text-white">
-                          {tx.description}
-                        </span>
-
-                        {tx.status === 'conciliado' && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[oklch(0.72_0.17_155/0.15)] text-[oklch(0.72_0.17_155)] border border-[oklch(0.72_0.17_155/0.3)]">
-                            🟢 Conciliado
-                          </span>
-                        )}
-                        {tx.status === 'ambiguo' && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[oklch(0.80_0.16_75/0.15)] text-[oklch(0.80_0.16_75)] border border-[oklch(0.80_0.16_75/0.3)] animate-pulse">
-                            🟡 Ambiguo ({tx.candidateCfdiIds?.length || 0} candidatos)
-                          </span>
-                        )}
-                        {tx.status === 'discrepancia' && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-950/60 text-rose-300 border border-rose-800">
-                            🔴 Discrepancia
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Metadatos bancarios */}
-                      <div className="flex items-center gap-2 text-xs text-[oklch(0.68_0.03_250)]">
-                        <span className="font-mono text-[11px]">{tx.date}</span>
-                        <span>•</span>
-                        <span className="font-mono text-[11px] text-[oklch(0.78_0.15_195)]">
-                          {tx.accountId}
-                        </span>
-                        <span>•</span>
-                        <span className="flex items-center gap-0.5">
-                          {isIncome ? (
-                            <span className="text-[oklch(0.72_0.17_155)] flex items-center font-medium">
-                              <ArrowDownLeft className="w-3 h-3" /> Cobro / Depósito
-                            </span>
-                          ) : (
-                            <span className="text-[oklch(0.68_0.03_250)] flex items-center">
-                              <ArrowUpRight className="w-3 h-3" /> Pago / Cargo
-                            </span>
-                          )}
-                        </span>
-                      </div>
-
-                      {/* Alerta de Discrepancia */}
-                      {tx.status === 'discrepancia' && (
-                        <div className="text-xs text-rose-300 flex items-center gap-1.5 pt-1">
-                          <ShieldAlert className="w-3.5 h-3.5 shrink-0 text-rose-400" />
-                          <span>
-                            {tx.alertReason || 'Pendiente de vincular con un comprobante fiscal.'}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* Match Conciliado */}
-                      {tx.reconciliationLocked && <p className="text-xs text-amber-300 pt-1">Pendiente de revisión manual · búsqueda automática pausada.</p>}
-                      {tx.status === 'conciliado' && matchedCfdi && (
-                        <div className="flex items-center gap-2 pt-1 flex-wrap">
-                          <button
-                            type="button"
-                            onClick={() => onOpenCfdiDetail(matchedCfdi)}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-[oklch(0.18_0.02_260)] border border-[oklch(0.30_0.03_260)] hover:border-[oklch(0.78_0.15_195)] text-white transition-colors"
-                          >
-                            <FileCheck2 className="w-3.5 h-3.5 text-[oklch(0.72_0.17_155)]" />
-                            <span className="font-mono text-[11px]">
-                              UUID: {matchedCfdi.uuidSat.slice(0, 18)}...
-                            </span>
-                            <span className="text-[10px] text-[oklch(0.68_0.03_250)]">
-                              ({matchedCfdi.nombreEmisor?.slice(0, 20) || matchedCfdi.rfcEmisor})
-                            </span>
-                            <ExternalLink className="w-3 h-3 text-[oklch(0.68_0.03_250)]" />
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => onUnmatch(tx.id)}
-                            title="Desvincular para reclasificar"
-                            className="text-[11px] text-[oklch(0.68_0.03_250)] hover:text-rose-400 flex items-center gap-1 p-1 transition-colors"
-                          >
-                            <Unlink className="w-3 h-3" /> Desvincular
-                          </button>
-                          {matchedCfdi.statusSat === 'no_verificado' && <span className="text-[10px] text-amber-300">Vigencia SAT sin verificar</span>}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Monto y Botones de Acción */}
-                  <div className="flex sm:flex-col items-end justify-between sm:justify-center gap-2 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-[oklch(0.30_0.03_260)]">
-                    <div
-                      className={`font-mono text-base sm:text-lg font-bold ${
-                        isIncome ? 'text-[oklch(0.72_0.17_155)]' : 'text-white'
-                      }`}
-                    >
-                      {isIncome ? '+' : '-'}{formatCurrency(tx.amount, tx.currency)}
-                    </div>
-
-                    {tx.status === 'ambiguo' && (
-                      <button
-                        type="button"
-                        onClick={() => onOpenResolver(tx)}
-                        className="px-3.5 py-1.5 text-xs font-sora font-bold rounded-xl bg-[oklch(0.80_0.16_75)] text-black shadow-xs hover:brightness-105 transition-all flex items-center gap-1.5"
-                      >
-                        <HelpCircle className="w-3.5 h-3.5" />
-                        Revisar candidatos
-                      </button>
-                    )}
-
-                    {tx.reconciliationLocked && onResumeReconciliation && (
-                      <button
-                        type="button"
-                        disabled={pendingResumeId !== null}
-                        aria-busy={pendingResumeId === tx.id}
-                        onClick={() => void resumeReconciliation(tx.id)}
-                        className="px-3 py-1.5 text-xs font-medium rounded-xl bg-[oklch(0.78_0.15_195/0.12)] hover:bg-[oklch(0.78_0.15_195/0.2)] border border-[oklch(0.78_0.15_195/0.35)] text-[oklch(0.78_0.15_195)] transition-colors flex items-center gap-1.5 disabled:opacity-50"
-                      >
-                        <Search className="w-3.5 h-3.5" />
-                        {pendingResumeId === tx.id ? 'Buscando…' : 'Buscar coincidencias'}
-                      </button>
-                    )}
-                    {tx.status === 'discrepancia' && !tx.reconciliationLocked && (
-                      <button
-                        type="button"
-                        onClick={() => onRequestUploadForDiscrepancy(tx)}
-                        className="px-3 py-1.5 text-xs font-medium rounded-xl bg-rose-900/50 hover:bg-rose-900 border border-rose-800 text-rose-200 transition-colors flex items-center gap-1"
-                      >
-                        Vincular CFDI
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-      <section className="pt-4 border-t border-[oklch(0.30_0.03_260)]">
-        <h2 className="font-sora font-bold text-sm text-white mb-3">Comprobantes registrados ({cfdis.length})</h2>
-        {cfdis.length === 0 ? <p className="text-xs text-[oklch(0.68_0.03_250)]">Carga un XML o registra un gasto provisional para comenzar.</p> : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {cfdis.map(record => <button key={record.id} type="button" onClick={() => onOpenCfdiDetail(record)} className="text-left p-3 rounded-xl border border-[oklch(0.30_0.03_260)] bg-[oklch(0.18_0.02_260)] hover:border-[oklch(0.78_0.15_195)] transition-colors flex gap-3">
-              <FileCheck2 className="w-4 h-4 text-[oklch(0.78_0.15_195)] shrink-0 mt-1" />
-              <span className="min-w-0 flex-1 space-y-1">
-                <span className="block text-xs font-semibold text-white truncate">{record.nombreEmisor || record.rfcEmisor}</span>
-                <span className="block font-mono text-[11px] text-[oklch(0.68_0.03_250)] break-all">{record.uuidSat || 'Gasto provisional · sin UUID fiscal'}</span>
-                <span className="block text-[11px] text-[oklch(0.78_0.15_195)]">{documentTypeLabel(record)}</span>
-                {record.tipoComprobante === 'P' ? <><span className="block text-xs text-white break-words">{record.paymentComplement ? `MontoTotalPagos declarado: ${formatDeclaredAmount(record.paymentComplement.totalPaymentsMxn, 'MXN')}` : 'Monto del pago: consulta el complemento en el XML'}</span><span className="block text-[10px] text-[oklch(0.68_0.03_250)]">Total del comprobante P: {formatCurrency(record.total, record.currency || 'XXX')}; no es un movimiento bancario.</span></> : <span className="block text-xs text-white break-words">Total declarado: {formatCurrency(record.total, record.currency || 'MXN')}</span>}
-                {record.metodoPago && <span className="block text-[10px] text-[oklch(0.68_0.03_250)]">Método de pago declarado: {record.metodoPago}</span>}
-                {record.relatedCfdis?.length ? <span className="block text-[10px] text-[oklch(0.68_0.03_250)]">Incluye UUID relacionados declarados; consulta el detalle.</span> : null}
-                {(record.tipoComprobante === 'E' || record.tipoComprobante === 'P') && <span className="block text-[10px] text-[oklch(0.68_0.03_250)]">Referencia documental; no se concilia automáticamente.</span>}
-                <span className={`block text-[10px] ${record.statusSat === 'cancelado' ? 'text-rose-300' : 'text-amber-300'}`}>{record.sourceType === 'manual' ? 'Registro manual pendiente de CFDI' : record.statusSat === 'no_verificado' ? 'Vigencia SAT sin verificar' : record.statusSat === 'cancelado' ? 'Marcado como cancelado' : 'Marcado como vigente'}</span>
-              </span>
-              <ExternalLink className="w-3 h-3 text-[oklch(0.68_0.03_250)] shrink-0 mt-1" />
-            </button>)}
-          </div>
-        )}
-      </section>
-    </div>
-  );
+    <section id="workspace-documents" ref={documentsRef} tabIndex={-1} aria-labelledby="workspace-documents-title" className="space-y-3 scroll-mt-24 rounded-xl border-t border-slate-700 pt-5 focus-visible:outline-2 focus-visible:outline-teal-300 focus-visible:outline-offset-4">
+      <h2 id="workspace-documents-title" className="font-sora text-lg font-bold text-white">Documentos cargados ({cfdis.length})</h2>
+      <p className="text-sm text-slate-300">Estos importes vienen de los documentos. Cargarlos no agrega ni quita dinero en el banco. Abre un documento para revisar sus datos.</p>
+      {cfdis.length === 0 ? <div className="rounded-xl border border-dashed border-slate-600 p-5 text-sm text-slate-300"><p className="font-semibold text-white">Aún no cargaste documentos</p><p className="mt-1">Agrega una factura XML, revisa un PDF o una foto, o anota un gasto mientras consigues su factura.</p></div> : <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{cfdis.map(record => <button key={record.id} type="button" onClick={() => onOpenCfdiDetail(record)} className="flex min-w-0 gap-3 rounded-xl border border-slate-600 bg-slate-900/50 p-4 text-left hover:border-teal-400">
+        <FileText aria-hidden="true" className="mt-1 h-5 w-5 shrink-0 text-teal-300" /><span className="min-w-0 flex-1 space-y-1.5">
+          <span className="block text-sm font-semibold text-white">{documentCardLabel(record, profileRfc)}</span>
+          <span className="block break-words text-sm text-slate-300">Emitido por: {record.nombreEmisor || record.rfcEmisor}</span>
+          <span className="block text-sm text-slate-300">Fecha: {record.fechaEmision.slice(0, 10)}</span>
+          <span className="block break-words text-sm font-semibold text-white">{record.tipoComprobante === 'P' ? record.paymentComplement ? `Pagos indicados en este documento: ${formatDeclaredAmount(record.paymentComplement.totalPaymentsMxn, 'MXN')}` : 'Consulta el importe del pago en el archivo XML' : `Importe del documento: ${money(record.total, record.currency || 'MXN')}`}</span>
+          {record.metodoPago && <span className="block text-xs text-slate-300">Forma indicada en la factura: {record.metodoPago === 'PUE' ? 'pago de una sola vez' : 'pago posterior o en partes'}</span>}
+          {record.relatedCfdis?.length ? <span className="block text-xs text-slate-300">Hace referencia a otros documentos. Puedes verlos en el detalle.</span> : null}
+          {(record.tipoComprobante === 'E' || record.tipoComprobante === 'P') && <span className="block text-xs text-slate-300">Se conserva como referencia; no se vincula automáticamente a un movimiento.</span>}
+          <span className={`block text-xs ${record.statusSat === 'cancelado' ? 'text-rose-200' : 'text-slate-300'}`}>{record.sourceType === 'manual' || record.sourceType === 'pdf' || record.sourceType === 'image' ? 'Anotación pendiente de la factura XML' : record.statusSat === 'no_verificado' ? 'Estado ante el SAT: pendiente de consultar' : record.statusSat === 'cancelado' ? 'Estado registrado: cancelado' : 'Estado registrado: vigente'}</span>
+          <span className="block break-all text-xs text-slate-400">{record.uuidSat ? `Identificador del documento: ${record.uuidSat}` : 'Este registro no tiene un identificador fiscal'}</span>
+        </span><ExternalLink aria-hidden="true" className="mt-1 h-4 w-4 shrink-0 text-slate-300" />
+      </button>)}</div>}
+    </section>
+  </div>;
 };

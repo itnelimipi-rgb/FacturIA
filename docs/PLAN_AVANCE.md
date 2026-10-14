@@ -1,6 +1,6 @@
 # Plan de avance de FacturIA
 
-Actualizado: 12 de octubre de 2026. Rama de trabajo y pruebas: `sprint-1`.
+Actualizado: 13 de octubre de 2026. Rama de trabajo y pruebas: `sprint-1`.
 La rama continuará separada de `main` hasta autorización explícita del usuario.
 Priorizar herramientas open source y APIs gratuitas; conservar el límite duro
 de USD 10 de recursos para el conjunto del workspace Railway.
@@ -11,7 +11,9 @@ El siguiente bloque se centra en que una persona sin conocimientos financieros
 pueda entender y usar el producto sin contexto del desarrollador. Seguir el
 [plan de frontend y UX](PLAN_FRONTEND_UX.md): lenguaje y acciones, primer uso,
 cargas guiadas, revisión contextual, accesibilidad y prueba de comprensión.
-Las entregas de ese plan todavía no están implementadas; los pendientes de
+La primera iteración de lenguaje e Inicio guiado está implementada en código;
+su validación final se registra en el estado del sprint. El plan completo y la
+prueba de comprensión con el dueño siguen pendientes. Los pendientes de
 integración permanecen en este documento para retomarlos después.
 
 ## Resultado que buscamos

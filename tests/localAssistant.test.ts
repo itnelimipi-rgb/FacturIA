@@ -136,7 +136,7 @@ test('document review help includes the verified guide and rejects the observed 
   const context = buildLocalAssistantContext(snapshot());
   const question = '¿Cómo reviso un movimiento ambiguo?';
   const messages = localAssistantMessages(question, context);
-  assert.match(messages[1].content, /varias coincidencias posibles/);
+  assert.match(messages[1].content, /varias facturas posibles/);
   assert.match(messages[1].content, /comprobante disputado por varios movimientos/);
   assert.match(messages[1].content, /importe, moneda, fecha y RFC/);
   assert.match(messages[1].content, /Un gasto provisional no es un CFDI timbrado/);

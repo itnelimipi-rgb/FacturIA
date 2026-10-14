@@ -9,6 +9,7 @@ import { DocumentExtraction } from './DocumentExtraction';
 import { validateDocumentFile } from '../lib/documentExtraction';
 import type { DocumentSource } from '../lib/documentExtraction';
 import type { ProvisionalDocumentHandler } from './DocumentExtraction';
+import { formatDeclaredAmount } from '../lib/documentSummary';
 
 interface UnifiedDropzoneProps {
   userId: string;
@@ -16,14 +17,23 @@ interface UnifiedDropzoneProps {
   demoMode?: boolean;
   onCfdiAdded: (cfdi: CfdiRecord, source: 'xml' | 'pdf' | 'image' | 'manual') => void | Promise<void>;
   onProvisionalAdded?: ProvisionalDocumentHandler;
+  onCfdiOpened?: (document: CfdiRecord) => void;
 }
 
-export const UnifiedDropzone: React.FC<UnifiedDropzoneProps> = ({ userId, rfcReceptor, demoMode = false, onCfdiAdded, onProvisionalAdded }) => {
+export function describeImportedXml(document: CfdiRecord, demoMode: boolean): {title: string; detail: string} {
+  const stored = demoMode ? 'Agregado a los ejemplos de este navegador.' : 'Guardado en tu cuenta.';
+  const amount = document.tipoComprobante === 'P'
+    ? document.paymentComplement ? `Pagos declarados en el documento: ${formatDeclaredAmount(document.paymentComplement.totalPaymentsMxn, 'MXN')}.` : 'Consulta los importes del pago en el complemento del XML; el total cero del comprobante no es el monto del pago.'
+    : `Importe declarado: ${document.total.toFixed(2)} ${document.currency || 'MXN'}.`;
+  return {title: document.tipoComprobante === 'P' ? 'Documento de pago guardado' : 'Documento XML guardado', detail: `${stored} ${amount} Guardarlo no confirma su estado en el SAT. Abre el documento para revisar sus datos y las opciones de consulta.`};
+}
+
+export const UnifiedDropzone: React.FC<UnifiedDropzoneProps> = ({ userId, rfcReceptor, demoMode = false, onCfdiAdded, onProvisionalAdded, onCfdiOpened }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isReading, setIsReading] = useState(false);
   const [extractionFile, setExtractionFile] = useState<{file: File; source: DocumentSource} | null>(null);
   const busy = isReading || extractionFile !== null;
-  const [lastNotification, setLastNotification] = useState<{ type: 'success' | 'warning' | 'error'; title: string; detail: string } | null>(null);
+  const [lastNotification, setLastNotification] = useState<{ type: 'success' | 'warning' | 'error'; title: string; detail: string; document?: CfdiRecord } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const requestId = useRef(0);
   useEffect(() => () => { requestId.current++; }, []);
@@ -46,13 +56,14 @@ export const UnifiedDropzone: React.FC<UnifiedDropzoneProps> = ({ userId, rfcRec
       if (currentRequest !== requestId.current) return;
       setLastNotification({
         type: demoEfos ? 'warning' : 'success',
-        title: demoEfos ? 'XML importado con alerta de demostración' : 'CFDI XML importado',
+        title: demoEfos ? 'Documento guardado con una alerta de ejemplo' : describeImportedXml(result.cfdi, demoMode).title,
         detail: demoEfos
-          ? `El RFC ${result.cfdi.rfcEmisor} coincide con la lista de ejemplo de la demo. No es una consulta oficial al SAT.`
-          : `Total: ${result.cfdi.total.toFixed(2)} ${result.cfdi.currency || 'MXN'} · RFC: ${result.cfdi.rfcEmisor}. Estructura validada; vigencia SAT y lista EFOS aún no verificadas.`
+          ? 'Agregado a los ejemplos de este navegador. Este proveedor tiene una alerta simulada en la demo; no es una respuesta del SAT.'
+          : describeImportedXml(result.cfdi, demoMode).detail,
+        document: result.cfdi,
       });
     } catch (error) {
-      if (currentRequest === requestId.current) setLastNotification({ type: 'error', title: 'No se pudo importar el XML', detail: error instanceof Error ? error.message : 'No se pudo leer o guardar el archivo.' });
+      if (currentRequest === requestId.current) setLastNotification({ type: 'error', title: 'No se pudo agregar el XML', detail: error instanceof Error ? error.message : 'No se pudo leer o guardar el archivo. Elige el archivo nuevamente para reintentar.' });
     } finally {
       if (currentRequest === requestId.current) setIsReading(false);
     }
@@ -73,7 +84,7 @@ export const UnifiedDropzone: React.FC<UnifiedDropzoneProps> = ({ userId, rfcRec
         setLastNotification(null); setExtractionFile({file, source});
       } catch (reason) { setLastNotification({type: 'error', title: 'No se pudo leer el archivo', detail: reason instanceof Error ? reason.message : 'Selecciona un documento válido.'}); }
     } else {
-      setLastNotification({ type: 'error', title: 'Formato no soportado', detail: 'Selecciona un XML CFDI, PDF, JPEG, PNG o WebP.' });
+      setLastNotification({ type: 'error', title: 'Necesitamos otro tipo de archivo', detail: 'Selecciona una factura XML, un PDF o una foto JPG, PNG o WebP. No se agregó ningún documento.' });
     }
   };
 
@@ -98,21 +109,20 @@ export const UnifiedDropzone: React.FC<UnifiedDropzoneProps> = ({ userId, rfcRec
         onDrop={event => { event.preventDefault(); setIsDragging(false); handleFiles(event.dataTransfer.files); }}
         onClick={() => { if (!busy) fileInputRef.current?.click(); }}
         onKeyDown={event => { if ((event.key === 'Enter' || event.key === ' ') && !busy) { event.preventDefault(); fileInputRef.current?.click(); } }}
-        role="button" tabIndex={0} aria-label="Cargar XML, PDF o imagen" aria-disabled={busy}
-        className={`relative border-2 border-dashed rounded-2xl p-6 sm:p-8 transition-all cursor-pointer flex flex-col items-center justify-center text-center ${isDragging ? 'border-[oklch(0.78_0.15_195)] bg-[oklch(0.78_0.15_195/0.1)] shadow-inner' : 'border-[oklch(0.30_0.03_260)] bg-[oklch(0.18_0.02_260)] hover:bg-[oklch(0.21_0.025_260)] hover:border-[oklch(0.78_0.15_195/0.5)]'}`}
+        role="button" tabIndex={0} aria-label="Elegir XML, PDF o foto para agregar un documento" aria-disabled={busy}
+        className={`relative border-2 border-dashed rounded-2xl p-6 sm:p-8 transition-all cursor-pointer flex flex-col items-center justify-center text-center focus-visible:outline-2 focus-visible:outline-teal-300 ${isDragging ? 'border-[oklch(0.78_0.15_195)] bg-[oklch(0.78_0.15_195/0.1)] shadow-inner' : 'border-[oklch(0.30_0.03_260)] bg-[oklch(0.18_0.02_260)] hover:bg-[oklch(0.21_0.025_260)] hover:border-[oklch(0.78_0.15_195/0.5)]'}`}
       >
         <input type="file" ref={fileInputRef} onClick={event => event.stopPropagation()} onChange={event => { handleFiles(event.target.files); event.target.value = ''; }} accept=".xml,.pdf,.jpg,.jpeg,.png,.webp" className="hidden" disabled={busy} />
         {isReading ? (
-          <div className="flex flex-col items-center py-2"><Loader2 className="w-10 h-10 text-[oklch(0.78_0.15_195)] animate-spin" /><p className="mt-3 text-sm font-sora font-semibold text-white">Validando y guardando el XML…</p></div>
+          <div className="flex flex-col items-center py-2" role="status"><Loader2 className="w-10 h-10 text-[oklch(0.78_0.15_195)] animate-spin" /><p className="mt-3 text-base font-sora font-semibold text-white">Leyendo y guardando tu documento…</p></div>
         ) : (
           <>
             <span className="p-3 mb-3 rounded-2xl bg-[oklch(0.78_0.15_195/0.14)] text-[oklch(0.78_0.15_195)] shadow-glow"><UploadCloud className="w-6 h-6" /></span>
-            <h3 className="font-sora text-sm font-bold text-white">Cargar comprobante fiscal</h3>
-            <p className="text-xs text-[oklch(0.68_0.03_250)] max-w-md mt-1">Arrastra el <strong className="text-[oklch(0.78_0.15_195)]">XML original del CFDI</strong> o lee un PDF o imagen para revisar y registrar un gasto provisional.</p>
-            <div className="flex flex-wrap items-center justify-center gap-2 mt-4 text-[11px]">
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[oklch(0.72_0.17_155/0.12)] text-[oklch(0.72_0.17_155)] border border-[oklch(0.72_0.17_155/0.3)]"><FileCode2 className="w-3 h-3" /> XML CFDI 4.0 / 3.3</span>
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[oklch(0.78_0.15_195/0.12)] text-[oklch(0.78_0.15_195)] border border-[oklch(0.78_0.15_195/0.3)]"><FileText className="w-3 h-3" /> PDF: texto / OCR</span>
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[oklch(0.65_0.20_295/0.12)] text-[oklch(0.65_0.20_295)] border border-[oklch(0.65_0.20_295/0.3)]"><ImageIcon className="w-3 h-3" /> OCR en tu navegador</span>
+            <h3 className="font-sora text-lg font-bold text-white">Agregar un documento</h3>
+            <p className="text-sm text-slate-300 max-w-md mt-2">Elige un archivo o arrástralo aquí. Agrega un documento a la vez.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 text-sm max-w-xl text-left">
+              <div className="p-3 rounded-xl border border-slate-600"><span className="flex items-center gap-2 font-semibold text-teal-300"><FileCode2 className="w-5 h-5" /> Tengo una factura XML</span><p className="text-slate-300 mt-1">Se leerá y guardará al elegirlo. Puedes pedir este archivo a quien emitió la factura. Hasta 2 MB.</p></div>
+              <div className="p-3 rounded-xl border border-slate-600"><span className="flex items-center gap-2 font-semibold text-teal-300"><FileText className="w-5 h-5" /><ImageIcon className="w-5 h-5" /> Tengo un PDF o una foto</span><p className="text-slate-300 mt-1">Revisarás los datos antes de guardar una anotación provisional; no sustituye la factura XML. Hasta 5 MiB. Fotos JPG, PNG o WebP.</p></div>
             </div>
           </>
         )}
@@ -122,7 +132,7 @@ export const UnifiedDropzone: React.FC<UnifiedDropzoneProps> = ({ userId, rfcRec
           if (demoMode) await onCfdiAdded(document, 'manual');
           else if (onProvisionalAdded) await onProvisionalAdded(document, source, file);
           else throw new Error('No se pudo conectar el guardado del documento. Actualiza la página.');
-          setLastNotification({type: 'success', title: 'Gasto provisional guardado', detail: `Total: ${document.total.toFixed(2)} MXN. Sin UUID ni verificación SAT. ${demoMode ? 'Original no guardado en la demo.' : 'Original privado disponible en el detalle.'}`});
+          setLastNotification({type: 'success', title: 'Anotación del gasto guardada', detail: `Importe revisado: ${document.total.toFixed(2)} MXN. Aún necesitas la factura XML; esta anotación no se vincula automáticamente con el banco. ${demoMode ? 'La demo guarda los campos en este navegador, sin conservar el archivo original.' : 'Abre la anotación en Documentos cargados para descargar el original privado.'}`});
         }} />}
       {demoMode && <div className="flex flex-wrap items-center gap-2 mt-3 px-1">
         <span className="text-[11px] text-[oklch(0.68_0.03_250)]">Sólo demostración:</span>
@@ -132,8 +142,8 @@ export const UnifiedDropzone: React.FC<UnifiedDropzoneProps> = ({ userId, rfcRec
       {lastNotification && (
         <div role={lastNotification.type === 'success' ? 'status' : 'alert'} className={`mt-3 p-3.5 rounded-xl border flex items-start gap-3 ${lastNotification.type === 'success' ? 'bg-[oklch(0.72_0.17_155/0.12)] border-[oklch(0.72_0.17_155/0.35)] text-[oklch(0.72_0.17_155)]' : lastNotification.type === 'warning' ? 'bg-[oklch(0.80_0.16_75/0.12)] border-[oklch(0.80_0.16_75/0.35)] text-[oklch(0.80_0.16_75)]' : 'bg-[oklch(0.65_0.22_25/0.12)] border-[oklch(0.65_0.22_25/0.35)] text-rose-300'}`}>
           {lastNotification.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" /> : <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />}
-          <div className="flex-1 text-xs"><div className="font-semibold">{lastNotification.title}</div><div className="mt-0.5 opacity-90">{lastNotification.detail}</div></div>
-          <button type="button" aria-label="Cerrar aviso" onClick={() => setLastNotification(null)} className="text-xs opacity-60 hover:opacity-100 font-bold px-1">✕</button>
+          <div className="flex-1 text-sm leading-relaxed"><div className="font-semibold">{lastNotification.title}</div><div className="mt-1">{lastNotification.detail}</div>{lastNotification.document?.uuidSat && onCfdiOpened && <button type="button" onClick={() => onCfdiOpened(lastNotification.document!)} className="mt-3 min-h-11 px-3 rounded-lg border border-current font-semibold focus-visible:outline-2 focus-visible:outline-white">Ver documento</button>}</div>
+          <button type="button" aria-label="Cerrar aviso" onClick={() => setLastNotification(null)} className="min-w-11 min-h-11 text-base hover:opacity-100 font-bold px-1">✕</button>
         </div>
       )}
     </div>

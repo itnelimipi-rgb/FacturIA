@@ -8,7 +8,7 @@ público, con la cuenta `d1512pb` y sin coautores de IA. `main` continúa intact
 ## Modos
 
 - `/` y `/demo`: demostración con datos sintéticos y almacenamiento local del
-  navegador. Funciona sin base de datos; **Reset demo** restablece los ejemplos.
+  navegador. Funciona sin base de datos; **Reiniciar ejemplos** restablece la demo.
 - `/workspace`: cuentas, sesiones, perfil y registros persistentes en PostgreSQL.
   Requiere configurar la base y autenticación; comienza vacío por usuario.
 
@@ -132,6 +132,14 @@ producción. Los scripts históricos de `tests/run_verification` delegan en la
 misma suite. Los fixtures son sintéticos y no tienen validez fiscal.
 
 ## Estado y próximo avance
+
+El 13 de octubre se implementó la primera iteración de frontend para usuarios
+sin conocimientos financieros: Inicio guiado, estados y acciones cotidianos,
+contexto del movimiento al agregar documentos, importes/documentos separados,
+plantilla bancaria y mejoras de lectura y teclado. Pasaron **407 pruebas**, lint,
+TypeScript y compilación; la revisión local confirmó acciones y foco a 320 px.
+La evidencia de publicación se registra en el [estado del sprint](docs/ESTADO_SPRINT_1.md). El plan completo
+y la prueba de comprensión sin ayuda del dueño siguen pendientes.
 
 El incremento documental del 12 de octubre pasó **373 pruebas**, lint, TypeScript
 y build, con auditoría npm completa sin vulnerabilidades conocidas. Cubre Pagos

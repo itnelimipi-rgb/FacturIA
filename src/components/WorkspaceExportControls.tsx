@@ -50,11 +50,12 @@ export function WorkspaceExportControls({mode, snapshot}: {mode: 'demo' | 'works
     catch (reason) {setError(reason instanceof Error ? reason.message : 'No se pudo exportar el reporte documental.');}
   };
   return <div className="flex flex-col gap-2">
-    <div className="flex flex-wrap items-center gap-3 text-xs">
-      <button type="button" disabled={busy} onClick={downloadBackup} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-600 hover:bg-slate-800 disabled:opacity-50"><Download className="h-3.5 w-3.5" />{busy ? 'Preparando respaldo…' : 'Descargar respaldo JSON'}</button>
-      <button type="button" disabled={busy || snapshot.transactions.length === 0} onClick={downloadCsv} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-600 hover:bg-slate-800 disabled:opacity-50"><Download className="h-3.5 w-3.5" />Exportar movimientos CSV</button>
-      <button type="button" disabled={busy || snapshot.cfdis.length === 0} onClick={downloadDocuments} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-600 hover:bg-slate-800 disabled:opacity-50"><Download className="h-3.5 w-3.5" />Exportar comprobantes CSV</button>
-      <span className="text-slate-400">JSON: registros y XML originales. Descarga por separado los PDF e imágenes desde su detalle. Guarda tus archivos en un lugar privado.</span>
+    <div className="flex flex-wrap items-center gap-3 text-sm">
+      <button type="button" disabled={busy} onClick={downloadBackup} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-600 hover:bg-slate-800 disabled:opacity-50"><Download className="h-3.5 w-3.5" />{busy ? 'Preparando copia…' : 'Copia para recuperar mis registros (.json)'}</button>
+      <button type="button" disabled={busy || snapshot.transactions.length === 0} onClick={downloadCsv} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-600 hover:bg-slate-800 disabled:opacity-50"><Download className="h-3.5 w-3.5" />Movimientos para hoja de cálculo (.csv)</button>
+      <button type="button" disabled={busy || snapshot.cfdis.length === 0} onClick={downloadDocuments} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-600 hover:bg-slate-800 disabled:opacity-50"><Download className="h-3.5 w-3.5" />Documentos para hoja de cálculo (.csv)</button>
+      <p className="w-full text-slate-300">La copia incluye tus registros y los XML originales. Los PDF y fotos se descargan por separado desde cada documento. Los archivos para hoja de cálculo sirven para consultar datos; no son una copia de recuperación.</p>
+      {mode === 'demo' && <p className="w-full text-sm text-slate-300">Esta copia contiene ejemplos de la demo y no se puede restaurar en tu espacio personal.</p>}
     </div>
     {error && <p role="alert" className="text-xs text-red-300">{error}</p>}
   </div>;

@@ -12,7 +12,7 @@ const MAX_REFERENCES = 6;
 const MAX_CURRENCIES = 5;
 
 export const LOCAL_AI_FISCAL_LIMIT = 'La IA local no determina deducciones ni impuestos, no emite o timbra facturas y no verifica sellos ni vigencia fiscal. Usa la consulta SAT del comprobante cuando esté disponible y revisa las decisiones fiscales con tu contador.';
-const LOCAL_AI_WORKFLOW_GUIDE = 'Guía de la aplicación: Conciliado significa que un movimiento tiene un comprobante vinculado; no acredita validez fiscal. Ambiguo requiere selección manual porque hay varias coincidencias posibles o un comprobante disputado por varios movimientos. En Facturas & Tesorería revisa los candidatos y compara importe, moneda, fecha y RFC antes de elegir el comprobante correcto. Discrepancia significa que falta un comprobante vinculado; revisa el movimiento y los documentos disponibles, sin asumir deducibilidad. Puedes importar XML de comprobantes y CSV de movimientos. PDF e imágenes se leen en el navegador; revisa y corrige sus campos y confirma el total antes de guardar un gasto provisional. Un gasto provisional no es un CFDI timbrado. Explica sólo el procedimiento solicitado de esta guía, sin repetir el contexto ni inventar pasos.';
+const LOCAL_AI_WORKFLOW_GUIDE = 'Guía de la aplicación: Con documento vinculado (estado interno conciliado) significa que un movimiento tiene una relación guardada; no acredita validez fiscal. Revisar coincidencia (ambiguo) requiere selección manual porque hay varias facturas posibles o un comprobante disputado por varios movimientos. En Movimientos y documentos abre Revisar coincidencia y compara proveedor, importe, moneda, fecha y RFC antes de Usar este documento. Sin documento vinculado (discrepancia) significa que no hay una relación guardada; revisa el motivo. Agregar comprobante carga un documento, no garantiza que se vincule. Volver a buscar reactiva una búsqueda pausada. Puedes importar XML de documentos y CSV de movimientos. PDF e imágenes se leen en el navegador; revisa y corrige sus campos y confirma el total antes de guardar un gasto provisional. Un gasto provisional no es un CFDI timbrado. Explica sólo el procedimiento solicitado de esta guía, sin repetir el contexto ni inventar pasos.';
 
 export type LocalAiSetupPhase = 'adapter' | 'module' | 'catalog' | 'model';
 export type LocalAiSetupCategory = 'cancelled' | 'timeout' | 'download' | 'gpu' | 'storage' | 'model_config' | 'unknown';
@@ -134,7 +134,7 @@ export function buildLocalAssistantContext(snapshot: {profile: Profile; transact
 }
 
 export function isFiscalDecisionQuestion(question: string) {
-  return /\b(?:sat|efos|deduc\w*|impuesto\w*|isr|iva|resico|timbr\w*|emit\w*|fiscal\w*|sello\w*|firma\w*)\b/i.test(question.normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+  return /\b(?:sat|efos|dedu[cz]\w*|impuesto\w*|isr|iva|resico|timbr\w*|emit\w*|fiscal\w*|sello\w*|firma\w*)\b/i.test(question.normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
 }
 
 /** Recorded facts are answered by deterministic rules, never inferred by the local model. */

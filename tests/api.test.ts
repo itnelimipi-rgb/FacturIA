@@ -129,7 +129,7 @@ test('assistant answers using current records and labels its rules honestly', as
   assert.equal(body.mode, 'rules');
   assert.equal(body.generatedByAI, false);
   assert.match(body.reply, /116/);
-  assert.match(body.reply, /no sustituye el saldo/);
+  assert.match(body.reply, /no es el saldo disponible/);
 });
 
 test('assistant refuses to fabricate fiscal savings or a live SAT check', async () => {
@@ -147,33 +147,33 @@ test('assistant gives concrete ambiguity guidance without claiming the account h
   assert.equal(response.status, 200);
   const body = await response.json();
   assert.equal(body.mode, 'rules'); assert.equal(body.generatedByAI, false);
-  assert.match(body.reply, /varios comprobantes candidatos/);
-  assert.match(body.reply, /comprobante coincide con varios movimientos/);
-  assert.match(body.reply, /no elige automáticamente/);
-  assert.match(body.reply, /Facturas & Tesorería/);
-  assert.match(body.reply, /Revisar candidatos/);
+  assert.match(body.reply, /varias facturas posibles/);
+  assert.match(body.reply, /factura que coincide con varios movimientos/);
+  assert.match(body.reply, /debes decidir/);
+  assert.match(body.reply, /Movimientos y documentos/);
+  assert.match(body.reply, /Revisar coincidencia/);
   assert.match(body.reply, /RFC, fecha, importe y moneda/);
-  assert.match(body.reply, /Vincular y Conciliar/);
-  assert.match(body.reply, /no confirma vigencia SAT/);
+  assert.match(body.reply, /Usar este documento/);
+  assert.match(body.reply, /no confirma su estado en el SAT/);
   assert.doesNotMatch(body.reply, /Hay \d|Tienes \d|116/);
 });
 
 test('assistant explains discrepancy and documentary reconciliation without offering fiscal validation', async () => {
-  for (const [message, expected] of [['¿Qué significa discrepancia?', /no tiene un vínculo documental válido/], ['Explica el estado conciliado', /está vinculado a un comprobante compatible/]]) {
+  for (const [message, expected] of [['¿Qué significa discrepancia?', /aún no hay una relación guardada/], ['Explica el estado conciliado', /relación guardada con un documento compatible/]]) {
     const response = await assistant(request('/api/assistant', {message, mode: 'demo', snapshot}));
     const body = await response.json();
     assert.equal(response.status, 200); assert.equal(body.generatedByAI, false);
-    assert.match(body.reply, expected as RegExp); assert.match(body.reply, /no confirma vigencia SAT/);
+    assert.match(body.reply, expected as RegExp); assert.match(body.reply, /no confirma su estado en el SAT/);
     assert.match(body.reply, /no consulta SAT, no emite ni timbra/);
   }
 });
 
 test('assistant distinguishes XML, bank CSV and editable provisional PDF or image imports', async () => {
   const cases: [string, RegExp[]][] = [
-    ['¿Cómo importo un XML?', [/XML original del CFDI/, /estructura, RFC, fecha, importes y moneda/, /no acredita por sí solo/]],
-    ['¿Cómo se importa un CSV?', [/Seleccionar CSV/, /vista previa/, /importe con su signo y moneda/, /no crea comprobantes CFDI ni conecta/]],
-    ['¿Cómo importo un PDF?', [/lectura se realiza en tu navegador/, /Revisa y corrige RFC/, /gasto provisional/, /no supongas una tasa/, /no sustituye el XML timbrado ni crea un UUID/]],
-    ['¿Cómo importo una imagen?', [/lectura se realiza en tu navegador/, /IVA y retenciones/, /gasto provisional/]],
+    ['¿Cómo importo un XML?', [/archivo XML de la factura/, /se comparan sus datos/, /no confirma por sí solo/]],
+    ['¿Cómo se importa un CSV?', [/Seleccionar archivo CSV/, /vista previa/, /dinero recibido o pagado y moneda/, /no conecta tu banco ni mueve dinero/]],
+    ['¿Cómo importo un PDF?', [/selecciona el PDF o la foto/, /Revisa y corrige el proveedor, RFC/, /gasto provisional/, /No inventes los impuestos/, /no se emite una factura/]],
+    ['¿Cómo importo una imagen?', [/selecciona el PDF o la foto/, /importes detectados/, /gasto provisional/]],
   ];
   for (const [message, checks] of cases) {
     const response = await assistant(request('/api/assistant', {message, mode: 'demo', snapshot}));
@@ -186,8 +186,8 @@ test('mixed factual and fiscal questions retain recorded summaries or fiscal gua
   for (const message of ['¿Cómo reviso un movimiento ambiguo y dame el saldo?', '¿Tengo egresos registrados?']) {
     const response = await assistant(request('/api/assistant', {message, mode: 'demo', snapshot}));
     const body = await response.json(); assert.equal(response.status, 200); assert.equal(body.generatedByAI, false);
-    assert.match(body.reply, /Movimientos registrados en MXN/); assert.match(body.reply, /116/);
-    assert.doesNotMatch(body.reply, /abre Revisar candidatos/);
+    assert.match(body.reply, /movimientos que cargaste en pesos mexicanos/); assert.match(body.reply, /116/);
+    assert.doesNotMatch(body.reply, /abre Revisar coincidencia/);
   }
   for (const message of ['¿Cómo deducir este gasto?', '¿Cómo reviso el IVA de un XML?', '¿Cómo timbro una factura?']) {
     const response = await assistant(request('/api/assistant', {message, mode: 'demo', snapshot}));
@@ -198,7 +198,26 @@ test('mixed factual and fiscal questions retain recorded summaries or fiscal gua
   const incomeOnly = {...snapshot, transactions: [{...transaction, amount: 100}], cfdis: []};
   const response = await assistant(request('/api/assistant', {message: '¿Tengo egresos registrados?', mode: 'demo', snapshot: incomeOnly}));
   const body = await response.json(); assert.equal(response.status, 200);
-  assert.match(body.reply, /ingresos \$100\.00, egresos \$0\.00/);
+  assert.match(body.reply, /entraron \$100\.00 y salieron \$0\.00/);
+});
+
+test('new user facing state names retain procedural guidance without invented counts or fiscal decisions', async () => {
+  for (const [message, expected] of [
+    ['¿Cómo reviso una coincidencia?', /varias facturas posibles/],
+    ['¿Qué significa Sin documento vinculado?', /Agregar comprobante/],
+    ['¿Qué significa Con documento vinculado?', /relación guardada/],
+    ['¿Qué significa búsqueda pausada?', /Volver a buscar/],
+  ]) {
+    const response = await assistant(request('/api/assistant', {message, mode: 'demo', snapshot}));
+    const body = await response.json();
+    assert.equal(response.status, 200); assert.equal(body.generatedByAI, false);
+    assert.match(body.reply, expected as RegExp);
+    assert.doesNotMatch(body.reply, /Hay \d|Tienes \d|116/);
+  }
+  const response = await assistant(request('/api/assistant', {message: '¿Cómo reviso una coincidencia y puedo deducir ese gasto?', mode: 'demo', snapshot}));
+  const body = await response.json();
+  assert.match(body.reply, /necesitan revisión contable/);
+  assert.doesNotMatch(body.reply, /Usar este documento/);
 });
 
 test('assistant requires a demo snapshot and validates its request', async () => {

@@ -1,8 +1,10 @@
 'use client';
 
-import React from 'react';
-import { BankTransaction, CfdiRecord } from '../lib/types';
-import { HelpCircle, Check, X, ShieldCheck, Calendar, FileText } from 'lucide-react';
+import React, {useCallback, useId, useRef, useState} from 'react';
+import type { BankTransaction, CfdiRecord } from '../lib/types';
+import { candidateComparison, reconciliationExplanation } from '../lib/reconciliationPresentation';
+import { useDialogFocus } from '../lib/useDialogFocus';
+import { HelpCircle, Check, X } from 'lucide-react';
 
 interface AmbiguousResolverModalProps {
   isOpen: boolean;
@@ -12,156 +14,59 @@ interface AmbiguousResolverModalProps {
   onResolve: (transactionId: string, selectedCfdiId: string) => void | Promise<void>;
 }
 
-export const AmbiguousResolverModal: React.FC<AmbiguousResolverModalProps> = ({
-  isOpen,
-  onClose,
-  transaction,
-  candidates,
-  onResolve
-}) => {
-  const [resolvingId, setResolvingId] = React.useState<string | null>(null);
-  if (!isOpen || !transaction) return null;
+export function AmbiguousResolverModal(props: AmbiguousResolverModalProps) {
+  if (!props.isOpen || !props.transaction) return null;
+  return <ResolverContent key={props.transaction.id} {...props} transaction={props.transaction} />;
+}
 
-  const formatCurrency = (val: number, currency = transaction.currency) => {
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency
-    }).format(Math.abs(val));
+function ResolverContent({onClose, transaction, candidates, onResolve}: Omit<AmbiguousResolverModalProps, 'transaction'> & {transaction: BankTransaction}) {
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [error, setError] = useState<{id: string; message: string} | null>(null);
+  const busyRef = useRef(false);
+  const titleId = useId();
+  const descriptionId = useId();
+  const close = useCallback(() => {if (!busyRef.current) onClose();}, [onClose]);
+  const dialogRef = useDialogFocus(true, close);
+  const formatCurrency = (value: number, currency: string) => new Intl.NumberFormat('es-MX', {style: 'currency', currency, currencyDisplay: 'code', minimumFractionDigits: 2}).format(Math.abs(value));
+
+  const resolve = async (documentId: string) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setResolvingId(documentId);
+    setError(null);
+    try {await onResolve(transaction.id, documentId);}
+    catch (reason) {setError({id: documentId, message: reason instanceof Error ? reason.message : 'No se pudo guardar el vínculo. Inténtalo de nuevo.'});}
+    finally {busyRef.current = false; setResolvingId(null);}
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-fade-in">
-      <div className="bg-[oklch(0.18_0.02_260)] rounded-2xl border border-[oklch(0.30_0.03_260)] shadow-2xl max-w-2xl w-full overflow-hidden text-[oklch(0.97_0.01_240)]">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-[oklch(0.30_0.03_260)] flex items-center justify-between bg-[oklch(0.80_0.16_75/0.1)]">
-          <div className="flex items-center gap-2.5">
-            <span className="p-2 rounded-xl bg-[oklch(0.80_0.16_75/0.2)] text-[oklch(0.80_0.16_75)]">
-              <HelpCircle className="w-5 h-5" />
-            </span>
-            <div>
-              <h3 className="font-sora font-bold text-base text-white">
-                Resolución Rápida de Conciliación Ambigua
-              </h3>
-              <p className="text-xs text-[oklch(0.68_0.03_250)]">
-                Múltiples CFDIs con coincidencia exacta de monto en ventana de ±3 días
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-lg text-[oklch(0.68_0.03_250)] hover:text-white hover:bg-[oklch(0.24_0.028_260)] transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Detalle del movimiento bancario */}
-        <div className="p-6">
-          <div className="rounded-xl p-4 bg-[oklch(0.21_0.025_260)] border border-[oklch(0.30_0.03_260)] mb-5">
-            <div className="text-[11px] font-semibold uppercase text-[oklch(0.68_0.03_250)] tracking-wider mb-1">
-              Movimiento Bancario por Conciliar
-            </div>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div>
-                <div className="text-sm font-bold text-white">
-                  {transaction.description}
-                </div>
-                <div className="text-xs text-[oklch(0.68_0.03_250)] flex items-center gap-2 mt-0.5">
-                  <span className="font-mono">Fecha: {transaction.date}</span>
-                  <span>•</span>
-                  <span className="font-mono text-[oklch(0.78_0.15_195)]">Cuenta: {transaction.accountId}</span>
-                </div>
-              </div>
-              <div className="text-lg font-mono font-bold text-rose-400">
-                {formatCurrency(transaction.amount)}
-              </div>
-            </div>
-          </div>
-
-          <div className="text-xs font-semibold text-[oklch(0.68_0.03_250)] uppercase tracking-wider mb-3 flex items-center gap-1.5">
-            <span>Comprobantes CFDI Candidatos ({candidates.length})</span>
-            <span className="text-[11px] lowercase text-[oklch(0.68_0.03_250)] font-normal">
-              — Selecciona el correspondiente con 1 clic
-            </span>
-          </div>
-
-          {/* Lista de Candidatos */}
-          <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
-            {candidates.map((cfdi) => (
-              <div
-                key={cfdi.id}
-                className="group p-4 rounded-xl border border-[oklch(0.30_0.03_260)] hover:border-[oklch(0.78_0.15_195)] bg-[oklch(0.21_0.025_260)] hover:bg-[oklch(0.24_0.028_260)] transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-              >
-                <div className="space-y-1.5 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-[oklch(0.18_0.02_260)] text-[oklch(0.78_0.15_195)]">
-                      {cfdi.rfcEmisor}
-                    </span>
-                    <span className="text-xs font-bold text-white">
-                      {cfdi.nombreEmisor || 'Emisor CFDI'}
-                    </span>
-                  </div>
-
-                  <div className="text-xs text-[oklch(0.68_0.03_250)] flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <span className="flex items-center gap-1 font-mono">
-                      <Calendar className="w-3.5 h-3.5" />
-                      {cfdi.fechaEmision.slice(0, 10)}
-                    </span>
-                    <span className="flex items-center gap-1 font-mono">
-                      <FileText className="w-3.5 h-3.5" />
-                      Subtotal: {formatCurrency(cfdi.subtotal, cfdi.currency || 'MXN')} · IVA registrado: {formatCurrency(cfdi.iva, cfdi.currency || 'MXN')}
-                    </span>
-                  </div>
-
-                  {cfdi.conceptos && cfdi.conceptos.length > 0 && (
-                    <div className="text-xs text-[oklch(0.90_0.01_240)] italic line-clamp-1">
-                      Concepto: {cfdi.conceptos[0].descripcion}
-                    </div>
-                  )}
-
-                  <div className="font-mono text-[10px] text-[oklch(0.68_0.03_250)] truncate">
-                    UUID: {cfdi.uuidSat}
-                  </div>
-                </div>
-
-                <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2 shrink-0">
-                  <div className="font-mono text-base font-bold text-white">
-                    {formatCurrency(cfdi.total, cfdi.currency || 'MXN')}
-                  </div>
-                  <button
-                    type="button"
-                    disabled={resolvingId !== null}
-                    onClick={async () => {
-                      if (resolvingId) return;
-                      setResolvingId(cfdi.id);
-                      try { await onResolve(transaction.id, cfdi.id); }
-                      finally { setResolvingId(null); }
-                    }}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-sora font-bold rounded-lg bg-linear-to-r from-[oklch(0.78_0.15_195)] to-[oklch(0.65_0.20_295)] text-[oklch(0.15_0.03_260)] shadow-glow hover:brightness-105 transition-all disabled:opacity-50"
-                  >
-                    <Check className="w-3.5 h-3.5" />
-                    {resolvingId === cfdi.id ? 'Guardando…' : 'Vincular y Conciliar'}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="px-6 py-3.5 bg-[oklch(0.21_0.025_260)] border-t border-[oklch(0.30_0.03_260)] flex items-center justify-between text-xs text-[oklch(0.68_0.03_250)]">
-          <span className="flex items-center gap-1">
-            <ShieldCheck className="w-4 h-4 text-[oklch(0.72_0.17_155)]" />
-            La vinculación actualiza la conciliación documental. Vigencia SAT pendiente.
-          </span>
-          <button
-            onClick={onClose}
-            className="px-3 py-1 text-[oklch(0.68_0.03_250)] hover:text-white font-medium"
-          >
-            Cancelar
-          </button>
-        </div>
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 backdrop-blur-xs sm:p-5">
+    <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={descriptionId} tabIndex={-1} className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-600 bg-slate-900 text-slate-100 shadow-2xl">
+      <div className="flex items-start justify-between gap-3 border-b border-slate-700 px-4 py-4 sm:px-6">
+        <div><h2 id={titleId} className="flex items-center gap-2 font-sora text-lg font-bold text-white"><HelpCircle aria-hidden="true" className="h-5 w-5 shrink-0 text-amber-200" />Revisar coincidencia</h2><p id={descriptionId} className="mt-2 text-sm leading-relaxed text-slate-300">{reconciliationExplanation(transaction)}</p></div>
+        <button type="button" disabled={resolvingId !== null} onClick={close} aria-label="Cerrar revisión de coincidencia" className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-slate-300 hover:bg-slate-800 disabled:opacity-50"><X aria-hidden="true" className="h-5 w-5" /></button>
       </div>
+      <div className="space-y-5 p-4 sm:p-6">
+        <section aria-label="Movimiento que estás revisando" className="rounded-xl border border-slate-600 bg-slate-800/60 p-4">
+          <p className="text-sm font-semibold text-slate-300">Movimiento del banco</p><h3 className="mt-1 break-words text-base font-semibold text-white">{transaction.description}</h3>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-sm"><p className="text-slate-300">Fecha: {transaction.date}</p><p className="font-mono font-semibold text-white">{transaction.amount > 0 ? 'Entró' : 'Salió'} {formatCurrency(transaction.amount, transaction.currency)}</p></div>
+        </section>
+        <section aria-label="Documentos posibles" className="space-y-3">
+          <div><h3 className="text-base font-semibold text-white">{candidates.length === 1 ? 'Documento posible' : `Documentos posibles (${candidates.length})`}</h3><p className="mt-1 text-sm text-slate-300">Compara quién emitió el documento, las fechas y los importes. Elige sólo si corresponde a este movimiento.</p></div>
+          {candidates.length === 0 && <p role="status" className="rounded-xl border border-slate-600 p-4 text-sm text-slate-300">No hay documentos disponibles para esta revisión. Cierra esta ventana y revisa los documentos cargados o agrega el que corresponda.</p>}
+          {candidates.map(document => {
+            const comparison = candidateComparison(transaction, document);
+            return <article key={document.id} className="space-y-3 rounded-xl border border-slate-600 bg-slate-800/50 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><h4 className="break-words text-base font-semibold text-white">{document.nombreEmisor || document.rfcEmisor}</h4><p className="mt-1 text-sm text-slate-300">Emitido el {document.fechaEmision.slice(0, 10)}</p></div><p className="font-mono font-semibold text-white">{formatCurrency(document.total, document.currency || 'MXN')}</p></div>
+              <div className="space-y-1 text-sm text-slate-300"><p>{comparison.amount}</p><p>{comparison.date}</p>{document.conceptos?.[0]?.descripcion && <p className="break-words">Descripción: {document.conceptos[0].descripcion}</p>}</div>
+              <details className="text-xs text-slate-400"><summary className="cursor-pointer py-1">Ver identificadores del documento</summary><p className="mt-1 break-all">RFC de quien lo emitió: {document.rfcEmisor}</p><p className="mt-1 break-all">Identificador del documento: {document.uuidSat}</p></details>
+              <div className="flex flex-col gap-2 sm:items-end"><button type="button" disabled={resolvingId !== null} aria-busy={resolvingId === document.id} onClick={() => void resolve(document.id)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-teal-300 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-teal-200 disabled:opacity-50"><Check aria-hidden="true" className="h-4 w-4" />{resolvingId === document.id ? 'Guardando vínculo…' : 'Usar este documento'}</button>
+                {error?.id === document.id && <p role="alert" className="w-full rounded-lg border border-rose-800 bg-rose-950/30 p-3 text-sm text-rose-200">{error.message} No se confirmó el vínculo; puedes volver a intentarlo.</p>}
+              </div>
+            </article>;
+          })}
+        </section>
+      </div>
+      <div className="flex flex-col gap-3 border-t border-slate-700 bg-slate-800/40 px-4 py-4 text-sm sm:flex-row sm:items-center sm:justify-between sm:px-6"><p className="text-slate-300">Vincular sólo relaciona este movimiento y el documento. No mueve dinero ni confirma su estado ante el SAT.</p><button type="button" disabled={resolvingId !== null} onClick={close} className="min-h-11 shrink-0 rounded-lg border border-slate-600 px-3 py-2 text-white hover:bg-slate-800 disabled:opacity-50">{resolvingId !== null ? 'Guardando…' : 'Volver sin elegir'}</button></div>
     </div>
-  );
-};
+  </div>;
+}

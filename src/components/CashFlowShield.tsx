@@ -1,128 +1,34 @@
 'use client';
 
 import React from 'react';
-import { CashFlowMetrics } from '../lib/types';
-import { Landmark, ShieldAlert, ReceiptText, TrendingUp, Info } from 'lucide-react';
+import type {BankTransaction, CashFlowMetrics} from '../lib/types';
+import {ArrowDownLeft, ArrowUpRight, Landmark} from 'lucide-react';
+import {describeLoadedDates, summarizeLoadedMovements, type MovementReviewFilter} from '../lib/dashboardPresentation';
 
 interface CashFlowShieldProps {
   metrics: CashFlowMetrics;
+  transactions?: BankTransaction[];
+  onReviewMovements?: (filter: MovementReviewFilter) => void;
 }
 
-export const CashFlowShield: React.FC<CashFlowShieldProps> = ({ metrics }) => {
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency: metrics.currency || 'MXN',
-      currencyDisplay: 'code',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(amount);
-  };
+export const CashFlowShield: React.FC<CashFlowShieldProps> = ({metrics, transactions, onReviewMovements}) => {
+  const loaded = transactions ? summarizeLoadedMovements(transactions) : null;
+  const totalCount = loaded?.totalCount ?? metrics.conciliadoCount + metrics.ambiguoCount + metrics.discrepanciaCount;
+  const totals = loaded?.totals ?? (totalCount ? [{currency: metrics.currency || 'MXN', incoming: metrics.totalIncome, outgoing: metrics.totalExpense, difference: metrics.totalBankBalance, unlinkedOutgoing: metrics.nonDeductibleExpenseDiscrepancies, unlinkedOutgoingCount: 0}] : []);
+  const format = (amount: number, currency: string) => new Intl.NumberFormat('es-MX', {style: 'currency', currency, currencyDisplay: 'code', minimumFractionDigits: 2, maximumFractionDigits: 2}).format(amount);
 
-  return (
-    <section className="w-full">
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <h2 className="font-sora text-xs font-bold tracking-wider uppercase text-[oklch(0.68_0.03_250)]">
-            Resumen de movimientos en MXN
-          </h2>
-          <p className="text-xs text-[oklch(0.68_0.03_250)] opacity-80">
-            Importes de los datos cargados; no incluye conversión de monedas
-          </p>
-        </div>
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-[oklch(0.72_0.17_155/0.15)] text-[oklch(0.72_0.17_155)] border border-[oklch(0.72_0.17_155/0.3)]">
-          <span className="w-2 h-2 rounded-full bg-[oklch(0.72_0.17_155)] animate-pulse"></span>
-          Resumen calculado
-        </span>
-      </div>
-
-      {/* Grid de 3 Tarjetas Directas */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* TARJETA 1: Saldo en Bancos */}
-        <div className="relative overflow-hidden rounded-2xl border border-[oklch(0.30_0.03_260)] bg-[oklch(0.21_0.025_260)] p-5 shadow-xs hover:border-[oklch(0.78_0.15_195/0.4)] transition-all">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-[oklch(0.68_0.03_250)]">
-              Movimiento neto importado
-            </span>
-            <div className="p-2 rounded-xl bg-[oklch(0.78_0.15_195/0.14)] text-[oklch(0.78_0.15_195)]">
-              <Landmark className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <div className="font-mono text-2xl font-bold tracking-tight text-white">
-              {formatCurrency(metrics.totalBankBalance)}
-            </div>
-            <div className="flex items-center gap-2 mt-1.5 text-xs text-[oklch(0.68_0.03_250)]">
-              <span className="text-[oklch(0.72_0.17_155)] font-medium flex items-center gap-0.5">
-                <TrendingUp className="w-3 h-3" />
-                Ingresos: {formatCurrency(metrics.totalIncome)}
-              </span>
-              <span>•</span>
-              <span>Egresos: {formatCurrency(metrics.totalExpense)}</span>
-            </div>
-          </div>
-          <div className="mt-3 pt-2.5 border-t border-[oklch(0.30_0.03_260)] flex items-center justify-between text-xs text-[oklch(0.68_0.03_250)]">
-            <span>Depósitos menos cargos importados</span>
-            <span className="font-mono text-[11px] text-[oklch(0.78_0.15_195)]">MXN</span>
-          </div>
-        </div>
-
-        {/* TARJETA 2: Gasto no Deducible Detectado (Discrepancias) */}
-        <div className="relative overflow-hidden rounded-2xl border border-[oklch(0.65_0.22_25/0.4)] bg-[oklch(0.65_0.22_25/0.08)] p-5 shadow-xs hover:border-[oklch(0.65_0.22_25/0.6)] transition-all">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-semibold uppercase tracking-wider text-rose-300">
-                Egresos pendientes
-              </span>
-              <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-rose-900/60 text-rose-200">
-                {metrics.discrepanciaCount} discrepancias
-              </span>
-            </div>
-            <div className="p-2 rounded-xl bg-rose-950/60 text-rose-400">
-              <ShieldAlert className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <div className="font-mono text-2xl font-bold tracking-tight text-rose-200">
-              {formatCurrency(metrics.nonDeductibleExpenseDiscrepancies)}
-            </div>
-            <div className="mt-1.5 flex items-center gap-1 text-xs text-rose-300">
-              <Info className="w-3.5 h-3.5 shrink-0" />
-              <span>
-                Cargos sin comprobante vinculado; la deducibilidad aún no se evalúa.
-              </span>
-            </div>
-          </div>
-          <div className="mt-3 pt-2.5 border-t border-[oklch(0.65_0.22_25/0.3)] flex items-center justify-between text-xs text-rose-300/80">
-            <span>Revisa las discrepancias</span>
-            <span className="font-semibold text-rose-300">Pendiente</span>
-          </div>
-        </div>
-
-        {/* TARJETA 3: Retenciones Proyectadas */}
-        <div className="relative overflow-hidden rounded-2xl border border-[oklch(0.30_0.03_260)] bg-[oklch(0.21_0.025_260)] p-5 shadow-xs hover:border-[oklch(0.80_0.16_75/0.4)] transition-all">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-[oklch(0.68_0.03_250)]">
-              Retenciones documentadas
-            </span>
-            <div className="p-2 rounded-xl bg-[oklch(0.80_0.16_75/0.14)] text-[oklch(0.80_0.16_75)]">
-              <ReceiptText className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <div className="font-mono text-2xl font-bold tracking-tight text-white">
-              {formatCurrency(metrics.projectedRetentionsResico)}
-            </div>
-            <div className="mt-1.5 text-xs text-[oklch(0.68_0.03_250)]">
-              Retenciones declaradas en comprobantes conciliados
-            </div>
-          </div>
-          <div className="mt-3 pt-2.5 border-t border-[oklch(0.30_0.03_260)] flex items-center justify-between text-xs text-[oklch(0.68_0.03_250)]">
-            <span>Vigencia SAT pendiente de verificar</span>
-            <span className="font-mono text-[oklch(0.72_0.17_155)] font-medium">MXN</span>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
+  return <section className="space-y-4" aria-labelledby="loaded-money-title">
+    <div><h2 id="loaded-money-title" className="text-lg font-semibold text-white">El dinero en tus movimientos</h2><p className="mt-1 text-sm leading-relaxed text-slate-300">Fuente: movimientos que cargaste. {loaded && totalCount > 0 ? describeLoadedDates(loaded.dateRange) : 'Se muestran todos los movimientos disponibles.'}</p></div>
+    {!totalCount ? <div className="rounded-2xl border border-dashed border-slate-600 bg-slate-900 p-5 text-base leading-relaxed text-slate-300">Aún no hay movimientos cargados para calcular cuánto dinero entró o salió. Las facturas por sí solas no dan esa información.</div> : totals.map(total => <div key={total.currency} className="rounded-2xl border border-slate-700 bg-slate-900 p-5 sm:p-6">
+      <h3 className="mb-4 text-base font-semibold text-white">Movimientos en {total.currency}</h3>
+      <dl className="grid grid-cols-1 gap-5 md:grid-cols-3">
+        {[{label: 'Dinero que entró', amount: total.incoming, detail: 'Depósitos y otros movimientos positivos cargados.', icon: ArrowDownLeft}, {label: 'Dinero que salió', amount: total.outgoing, detail: 'Pagos y otros movimientos negativos cargados.', icon: ArrowUpRight}, {label: 'Diferencia entre entradas y salidas', amount: total.difference, detail: 'Dinero que entró menos dinero que salió en estos datos. No es el saldo disponible de tu cuenta bancaria.', icon: Landmark}].map(item => <div key={item.label} className="min-w-0">
+          <dt className="flex items-start gap-2 text-sm font-medium text-slate-200"><item.icon className="mt-0.5 shrink-0 text-teal-200" size={18} />{item.label}</dt><dd className="mt-3 break-words font-mono text-xl font-semibold text-white">{format(item.amount, total.currency)}</dd><dd className="mt-2 text-sm leading-relaxed text-slate-300">{item.detail}</dd>
+        </div>)}
+      </dl>
+      {total.unlinkedOutgoingCount > 0 && <div className="mt-5 border-t border-slate-700 pt-4"><p className="text-sm leading-relaxed text-slate-300">De ese dinero que salió, {format(total.unlinkedOutgoing, total.currency)} corresponde a {total.unlinkedOutgoingCount} {total.unlinkedOutgoingCount === 1 ? 'movimiento pendiente de revisar o vincular' : 'movimientos pendientes de revisar o vincular'}. Incluye las coincidencias por revisar y las búsquedas pausadas. No significa que sea un gasto rechazado por el SAT.</p>{onReviewMovements && <button type="button" onClick={() => onReviewMovements('all')} className="mt-3 inline-flex min-h-11 items-center rounded-xl border border-slate-600 px-4 py-2 text-sm font-semibold text-teal-200 hover:border-teal-300 hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-300">Revisar movimientos y sus documentos</button>}</div>}
+    </div>)}
+    {totals.length > 1 && <p className="text-sm leading-relaxed text-slate-300">Cada moneda se muestra por separado. Los importes no se suman entre monedas ni se convierten a pesos.</p>}
+    {totalCount > 0 && <details className="rounded-xl border border-slate-700 bg-slate-900 p-4 text-sm text-slate-300"><summary className="cursor-pointer rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-300">Ver retenciones registradas en documentos vinculados</summary><p className="mt-3 font-mono text-base text-white">{format(metrics.projectedRetentionsResico, metrics.currency || 'MXN')}</p><p className="mt-2 leading-relaxed">Es un dato escrito en los documentos vinculados, en {metrics.currency || 'MXN'}. No es un cálculo de impuestos a pagar ni confirma una deducción.</p></details>}
+  </section>;
 };

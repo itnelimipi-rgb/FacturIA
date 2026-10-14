@@ -1,10 +1,47 @@
-# Estado del sprint — 12 de octubre de 2026
+# Estado del sprint — 13 de octubre de 2026
 
 Trabajo publicado en `sprint-1` del repositorio público, con autoría de la cuenta
 GitHub `d1512pb` del usuario y sin coautores de IA. `main` permanece intacto;
 no se creó PR ni se hizo merge. PostgreSQL local está habilitado y migrado.
 Railway staging está activo con datos sintéticos y límite duro de USD 10
 para recursos de todo el workspace.
+
+## Frontend y experiencia de usuario — 13 de octubre
+
+Primera iteración implementada en código:
+
+- Inicio explica documentos/movimientos y ofrece el siguiente paso según los
+  registros; los pendientes abren la lista con el filtro correspondiente.
+- Estados cotidianos, causas y acciones reales: Con documento vinculado,
+  Revisar coincidencia, Sin documento vinculado y Volver a buscar.
+- Agregar comprobante conserva el movimiento y muestra el resultado al guardar;
+  un vínculo no se anuncia por el mero hecho de cargar un XML.
+- Facturas emitidas/recibidas se distinguen por RFC; bancos muestran entradas,
+  salidas y diferencia por moneda y fechas cargadas, sin atribuir saldo real.
+- Pagos priorizan importes y saldos de ese documento, con códigos en datos
+  secundarios. SAT distingue sin consultar/no encontrado/fallo/respuesta.
+- Plantilla CSV compatible con el parser; captura manual deja impuestos
+  desconocidos vacíos. Descargas y recuperación quedan en una zona secundaria.
+- Régimen se elige explícitamente, sin heredar elección de otra cuenta. Diálogos
+  permiten teclado/Escape y devuelven foco; móvil ajusta cabecera y destinos.
+
+La revisión local comprobó filtro, comparación, vínculo, quitar/volver a buscar,
+carga XML con contexto, apertura del resultado y reinicio a seis documentos y
+cinco movimientos. Los hallazgos de foco tras resolver y desbordamiento a 320 px
+se corrigieron y se comprobaron en la compilación final: sin desbordamiento
+horizontal a 320 px, foco en movimientos y aviso visible después de vincular,
+quitar vínculo y volver a buscar. Teclado/Escape conserva el foco del diálogo.
+No se modificaron el motor, los estados persistidos, el SQL ni las integraciones.
+La prueba de comprensión del dueño está pendiente, junto con el resto del
+plan UX: navegación separada, mapeo CSV, perfil incompleto, captura simplificada,
+revisión completa de accesibilidad, zoom y más dispositivos.
+Validación local: **407/407 pruebas**, lint, TypeScript y compilación aprobados.
+Auditoría npm completa: cero vulnerabilidades conocidas. CI y deployment se
+registrarán al completarse. No se añadieron dependencias ni recursos de Railway.
+Consumo de recursos del workspace leído el 13 de octubre a las 19:41 (Ciudad
+de México): **USD 0.0553**, con límite duro **USD 10** activo y sin excederlo.
+El nuevo ciclo va del 13 de octubre al 13 de noviembre a las 13:13; USD 6.60
+corresponde a la lectura histórica del ciclo anterior.
 
 ## Incremento del 11 de octubre implementado en código
 

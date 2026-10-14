@@ -99,10 +99,10 @@ export function WorkspaceRestoreControls({profile, occupied, onRestored}: {
   };
 
   return <section aria-labelledby={`${inputId}-heading`} aria-busy={busy} className="rounded-xl border border-slate-700 p-4 space-y-3 text-xs">
-    <h2 id={`${inputId}-heading`} className="font-semibold text-slate-200">Restaurar respaldo JSON</h2>
+    <h2 id={`${inputId}-heading`} className="font-semibold text-slate-200">Recuperar registros de una copia (.json)</h2>
     {success && <p role="status" className="text-emerald-300">{success}</p>}
     {occupied ? !success && <p className="text-slate-400">La restauración requiere un espacio vacío; tus datos actuales se conservan.</p> : <>
-      <p id={`${inputId}-help`} className="text-slate-400">Selecciona un respaldo de Mi espacio con el RFC {profile.rfc}, de hasta 25 MiB. Tu perfil actual se conserva. Revisa la vista previa antes de restaurarlo.</p>
+      <p id={`${inputId}-help`} className="text-slate-300">Selecciona la copia descargada de tu espacio personal, con el RFC {profile.rfc}, de hasta 25 MiB. Tu perfil actual se conserva. Revisa el contenido antes de recuperar los registros. Los PDF y fotos originales no están incluidos.</p>
       <div className="flex flex-wrap items-center gap-3">
         <label htmlFor={inputId} className="font-medium text-slate-200">Archivo de respaldo</label>
         <input ref={fileInput} id={inputId} type="file" accept=".json,application/json" disabled={busy} onChange={selectFile} aria-describedby={`${inputId}-help`} className="min-w-0 max-w-full text-slate-300 file:mr-3 file:rounded-lg file:border file:border-slate-600 file:bg-slate-800 file:px-3 file:py-2 file:text-slate-200 disabled:opacity-50" />
@@ -115,8 +115,8 @@ export function WorkspaceRestoreControls({profile, occupied, onRestored}: {
           <div><dt className="text-slate-400">RFC</dt><dd className="font-mono text-slate-100">{preview.rfc}</dd></div>
           <div><dt className="text-slate-400">Comprobantes</dt><dd className="font-semibold">{preview.documents}</dd></div>
           <div><dt className="text-slate-400">Movimientos</dt><dd className="font-semibold">{preview.transactions}</dd></div>
-          <div><dt className="text-slate-400">Conciliados</dt><dd className="font-semibold">{preview.matchedTransactions}</dd></div>
-          <div><dt className="text-slate-400">Pausados</dt><dd className="font-semibold">{preview.lockedTransactions}</dd></div>
+          <div><dt className="text-slate-400">Con documento vinculado</dt><dd className="font-semibold">{preview.matchedTransactions}</dd></div>
+          <div><dt className="text-slate-400">Búsqueda pausada</dt><dd className="font-semibold">{preview.lockedTransactions}</dd></div>
         </dl>
         <p className="text-amber-200">{warning}</p>
         <p className="text-slate-400">Sólo se restaura en un espacio vacío. Los XML se vuelven a validar; la vigencia SAT y la lista EFOS oficial no están verificadas.</p>

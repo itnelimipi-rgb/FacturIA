@@ -60,9 +60,9 @@ test('payment detail renders exact declared currencies and balances while keepin
     version: '2.0', totalPaymentsMxn: '3400.25', payments: [{ date: '2026-10-12T12:34:56', currency: 'USD', amount: '200.123456', form: '03', exchangeRate: '17.125', relatedDocuments: [{ uuid: '550E8400-E29B-41D4-A716-446655440009', currency: 'USD', equivalence: '1', installment: 2, previousBalance: '500', paidAmount: '200.123456', remainingBalance: '299.876544', taxObject: '02' }] }],
   } });
   const html = renderToStaticMarkup(React.createElement(CfdiDetailModal, { isOpen: true, onClose: () => {}, cfdi: payment }));
-  for (const text of ['MontoTotalPagos declarado en MXN', 'MXN 3,400.25', 'USD 200.123456', 'USD 299.876544', 'USD 500.00', 'TipoCambioP declarado', '17.125', 'FechaPago', '2026-10-12T12:34:56', 'El total cero y la moneda XXX']) assert.ok(html.includes(text), text);
+  for (const text of ['Total declarado en pesos mexicanos (MXN)', 'MXN 3,400.25', 'USD 200.123456', 'USD 299.876544', 'USD 500.00', 'Tipo de cambio declarado (TipoCambioP)', '17.125', 'Fecha del pago:', '2026-10-12 a las 12:34:56', 'El cero y el código de moneda XXX']) assert.ok(html.includes(text), text);
   assert.ok(!html.includes('IVA declarado'));
-  assert.match(html, /no crea cobros, cargos o conciliaciones/);
+  assert.match(html, /no agrega movimientos de dinero/);
 });
 
 test('related UUID lookup ignores another owner and payment detail bounds visible lists', () => {
@@ -71,13 +71,13 @@ test('related UUID lookup ignores another owner and payment detail bounds visibl
   const payment = record({ tipoComprobante: 'P', total: 0, currency: 'XXX', relatedCfdis: [{ type: '04', uuids: [referencedUuid] }], paymentComplement: { version: '2.0', totalPaymentsMxn: '110', payments: Array.from({ length: 11 }, () => declared) } });
   const foreign = record({ userId: 'foreign-owner', uuidSat: referencedUuid, tipoComprobante: 'E' });
   const html = renderToStaticMarkup(React.createElement(CfdiDetailModal, { isOpen: true, onClose: () => {}, cfdi: payment, documents: [foreign] }));
-  assert.ok(!html.includes('Registrado en tu cuenta:'));
-  assert.ok(html.includes('su comprobante no está cargado en esta cuenta.'));
+  assert.ok(!html.includes('Documento cargado en tu cuenta:'));
+  assert.ok(html.includes('Este documento relacionado aún no está cargado en tu cuenta.'));
   assert.ok(html.includes('Pago declarado 10'));
   assert.ok(!html.includes('Pago declarado 11'));
   assert.ok(html.includes('Se muestran diez pagos de 11.'));
   const own = record({ uuidSat: referencedUuid });
   const withOwn = renderToStaticMarkup(React.createElement(CfdiDetailModal, { isOpen: true, onClose: () => {}, cfdi: payment, documents: [own] }));
-  assert.ok(withOwn.includes('Registrado en tu cuenta: CFDI de ingreso (I)'));
-  assert.ok(withOwn.includes('vigencia SAT sin verificar'));
+  assert.ok(withOwn.includes('Documento cargado en tu cuenta: Factura'));
+  assert.ok(withOwn.includes('Estado SAT sin confirmar'));
 });
