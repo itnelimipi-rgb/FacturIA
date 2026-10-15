@@ -6,6 +6,33 @@ no se creó PR ni se hizo merge. PostgreSQL local está habilitado y migrado.
 Railway staging está activo con datos sintéticos y límite duro de USD 10
 para recursos de todo el workspace.
 
+## Navegación separada — 15 de octubre
+
+Segunda iteración de la Entrega 2, comprobada localmente:
+
+- Barra `Inicio`, `Movimientos`, `Documentos` y `Ayuda` con `aria-current` y
+  controles de 44 px. Movimientos: carga CSV y lista del banco. Documentos: carga
+  XML/PDF/foto, gasto sin factura y biblioteca con búsqueda propia.
+- Las secciones se ocultan sin desmontarse: búsquedas, filtros, carga abierta e
+  historial de Ayuda sobreviven al cambiar de sección o a `Acerca de FacturIA`.
+  Una tarea explícita reemplaza filtro y búsqueda y avisa si limpió una búsqueda.
+- `Agregar comprobante` conserva el movimiento en Documentos; los textos remiten a
+  `Ver resultado en movimientos`. Asistente por reglas y guía local nombran la
+  sección real de cada acción, con regresiones que rechazan el nombre anterior.
+- Foco: destino de cada navegación; resultado de la carga si el botón usado quedó
+  deshabilitado; al cerrar un diálogo cuyo control desapareció, sólo una lista visible.
+
+Recorrido local en la demo: pendientes de Inicio, búsqueda conservada al cambiar
+de sección y limpiada con aviso desde Inicio, comprobante con contexto y XML de
+ejemplo vinculado, búsqueda de documentos con resultado y sin resultado, detalle
+con Escape y foco de regreso, pregunta de Ayuda conservada e ida/vuelta a
+`Acerca de FacturIA`. Sin desbordamiento horizontal de página a 390 ni 320 px.
+Validación: **417/417 pruebas**, lint, TypeScript, build y auditoría npm sin
+vulnerabilidades. No cambian motor, estados persistidos, SQL, API ni dependencias.
+Pendientes: publicación y comprobación en staging de esta iteración, prueba de
+comprensión del dueño, mapeo CSV, perfil incompleto, captura simplificada y
+revisión completa de accesibilidad, zoom y dispositivos.
+
 ## Frontend y experiencia de usuario — 13 de octubre
 
 Primera iteración publicada y comprobada en staging:

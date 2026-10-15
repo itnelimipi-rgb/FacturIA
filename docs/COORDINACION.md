@@ -5,8 +5,9 @@ componentes, pero no almacenamiento ni datos. Consultar `docs/PLAN_AVANCE.md` y
 `docs/STAGING.md` antes de continuar.
 La prioridad actual es frontend y experiencia para personas sin conocimientos
 financieros: seguir `docs/PLAN_FRONTEND_UX.md`. La primera iteración de lenguaje,
-acciones e Inicio guiado está publicada y comprobada en staging; consultar la evidencia del sprint
-antes de ampliar recorridos. El plan completo y la prueba de comprensión con el
+acciones e Inicio guiado está publicada y comprobada en staging; la navegación
+separada (Inicio/Movimientos/Documentos/Ayuda) está comprobada localmente. Consultar
+la evidencia del sprint antes de ampliar recorridos. El plan completo y la prueba de comprensión con el
 dueño siguen pendientes. No iniciar correos ni WhatsApp en este bloque.
 
 Para compartir este repo entre Codex y Claude Code en la misma PC:

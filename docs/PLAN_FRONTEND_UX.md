@@ -2,7 +2,8 @@
 
 Fecha: 12 de octubre de 2026. Rama: `sprint-1`.
 Estado: primera iteración publicada y validada localmente y en staging el 13 de
-octubre. Evidencia en `ESTADO_SPRINT_1.md` y `STAGING.md`. El plan completo sigue en curso.
+octubre; navegación separada de la Entrega 2 implementada y comprobada localmente
+el 15 de octubre. Evidencia en `ESTADO_SPRINT_1.md` y `STAGING.md`. El plan completo sigue en curso.
 Base revisada: código de `8997e09`, demo desplegada y recorridos del frontend.
 
 ## Primera iteración — 13 de octubre
@@ -26,9 +27,34 @@ guardar el perfil, recargar y cerrar sesión conservaron el resultado esperado.
 La prueba de comprensión sin ayuda del dueño sigue pendiente: ninguna prueba
 automatizada la sustituye.
 
-Quedan navegación completamente separada en Movimientos/Documentos, mapeo de
-columnas de distintos CSV, perfil incompleto, captura simplificada de gastos,
-ampliación de recorridos y evaluación completa de accesibilidad/zoom/dispositivos.
+Quedaban navegación completamente separada en Movimientos/Documentos (resuelta
+el 15 de octubre, ver abajo), mapeo de columnas de distintos CSV, perfil incompleto,
+captura simplificada de gastos, ampliación de recorridos y evaluación completa de
+accesibilidad/zoom/dispositivos.
+
+## Navegación separada — 15 de octubre
+
+La barra principal es `Inicio`, `Movimientos`, `Documentos` y `Ayuda`. Movimientos
+reúne la carga CSV y la lista del banco; Documentos reúne la carga de XML/PDF/foto,
+`Anotar un gasto sin factura` y una lista propia con búsqueda por nombre, RFC,
+identificador, fecha o descripción. Ninguna lista se repite en otra sección.
+
+Las secciones permanecen montadas y sólo se ocultan: cambiar de sección o abrir
+`Acerca de FacturIA` conserva búsquedas, filtros, la carga abierta y el historial
+de Ayuda. Sólo una tarea explícita (por ejemplo, un pendiente de Inicio o `Ver
+resultado en movimientos`) reemplaza filtro y búsqueda, y avisa si limpió una
+búsqueda escrita. `Agregar comprobante` abre Documentos con el movimiento visible
+y su estado actualizado al guardar. El asistente y la guía local nombran la
+sección real de cada acción. El foco va al destino de cada navegación, al
+resultado de una carga cuando el botón usado queda deshabilitado, y nunca a una
+sección oculta al cerrar un diálogo.
+
+Comprobado en navegador local: tareas de Inicio, conservación de búsqueda al
+cambiar de sección, aviso al reemplazarla, comprobante con contexto, XML de
+ejemplo, búsqueda vacía/con resultados, detalle con Escape y foco de regreso,
+Ayuda e ida/vuelta a `Acerca de FacturIA`; sin desbordamiento a 390 y 320 px.
+Pasaron 417 pruebas, lint, tipos, build y auditoría npm sin vulnerabilidades.
+Sigue pendiente la prueba de comprensión del dueño y el resto de entregas.
 
 ## Objetivo y criterio principal
 
