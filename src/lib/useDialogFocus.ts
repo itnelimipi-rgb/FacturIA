@@ -32,7 +32,8 @@ export function useDialogFocus(isOpen: boolean, onClose: () => void) {
       document.removeEventListener('keydown', onKeyDown);
       if (previous?.isConnected) previous.focus();
       else {
-        const destination = document.getElementById('workspace-movements');
+        // Only a visible list can receive focus; hidden workspace sections stay mounted.
+        const destination = ['workspace-movements', 'workspace-documents'].map(id => document.getElementById(id)).find(element => element?.getClientRects().length);
         destination?.focus({preventScroll: true});
         destination?.scrollIntoView({block: 'start', behavior: 'auto'});
       }

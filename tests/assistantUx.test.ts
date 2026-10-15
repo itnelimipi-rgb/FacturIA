@@ -9,15 +9,17 @@ const transactions = [{...SEED_TRANSACTIONS[0], id: 'review', amount: -100, stat
 const metrics = MatchingEngineService.calculateCashFlowShieldMetrics(transactions, []);
 
 test('plain new action questions get procedures without pretending they changed the account', () => {
-  const cases: [string, RegExp][] = [
-    ['¿Cómo anoto un gasto sin factura?', /anotación provisional/],
-    ['¿Cómo agrego mis documentos?', /Agregar documentos/],
-    ['¿Cómo quito un vínculo?', /No borra el movimiento ni el documento/],
-    ['¿Cómo vuelvo a buscar?', /no garantiza que encuentre uno compatible/],
+  const cases: [string, RegExp, RegExp][] = [
+    ['¿Cómo anoto un gasto sin factura?', /anotación provisional/, /^En Documentos usa Anotar un gasto sin factura/],
+    ['¿Cómo agrego mis documentos?', /Agregar documentos/, /abre Documentos/],
+    ['¿Cómo quito un vínculo?', /No borra el movimiento ni el documento/, /en Movimientos y usa Quitar vínculo/],
+    ['¿Cómo vuelvo a buscar?', /no garantiza que encuentre uno compatible/, /en Movimientos y usa Volver a buscar/],
   ];
-  for (const [question, needed] of cases) {
+  for (const [question, needed, destination] of cases) {
     const reply = assistantReply(question, metrics);
     assert.match(reply, needed as RegExp);
+    assert.match(reply, destination);
+    assert.doesNotMatch(reply, /Movimientos y documentos/);
     assert.doesNotMatch(reply, /Hay \d|Tienes \d|\$|ya se guardó|ya se quitó/i);
   }
 });
@@ -37,5 +39,6 @@ test('assistant identifies its unlinked subset while the bank overview includes 
   assert.match(reply, /estado «Sin documento vinculado»/);
   assert.match(reply, /\$50\.00/);
   assert.match(reply, /coincidencias por revisar se cuentan aparte/);
+  assert.match(reply, /Abre Movimientos para revisar/);
   assert.doesNotMatch(reply, /rechazado|no deducible/);
 });

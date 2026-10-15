@@ -35,8 +35,13 @@ export const UnifiedDropzone: React.FC<UnifiedDropzoneProps> = ({ userId, rfcRec
   const busy = isReading || extractionFile !== null;
   const [lastNotification, setLastNotification] = useState<{ type: 'success' | 'warning' | 'error'; title: string; detail: string; document?: CfdiRecord } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const notificationRef = useRef<HTMLDivElement>(null);
   const requestId = useRef(0);
   useEffect(() => () => { requestId.current++; }, []);
+  // A control disabled while saving drops keyboard focus; place it on the result instead.
+  useEffect(() => {
+    if (lastNotification && document.activeElement === document.body) notificationRef.current?.focus({preventScroll: true});
+  }, [lastNotification]);
 
   const processXmlFile = async (file: File) => {
     if (busy) return;
@@ -140,7 +145,7 @@ export const UnifiedDropzone: React.FC<UnifiedDropzoneProps> = ({ userId, rfcRec
         <button type="button" disabled={busy} onClick={() => uploadSample(true)} className="text-[11px] px-2.5 py-1 rounded-lg bg-[oklch(0.65_0.22_25/0.1)] text-rose-300 border border-[oklch(0.65_0.22_25/0.35)] flex items-center gap-1.5 disabled:opacity-50"><ShieldCheck className="w-3.5 h-3.5" /> Probar alerta EFOS de ejemplo</button>
       </div>}
       {lastNotification && (
-        <div role={lastNotification.type === 'success' ? 'status' : 'alert'} className={`mt-3 p-3.5 rounded-xl border flex items-start gap-3 ${lastNotification.type === 'success' ? 'bg-[oklch(0.72_0.17_155/0.12)] border-[oklch(0.72_0.17_155/0.35)] text-[oklch(0.72_0.17_155)]' : lastNotification.type === 'warning' ? 'bg-[oklch(0.80_0.16_75/0.12)] border-[oklch(0.80_0.16_75/0.35)] text-[oklch(0.80_0.16_75)]' : 'bg-[oklch(0.65_0.22_25/0.12)] border-[oklch(0.65_0.22_25/0.35)] text-rose-300'}`}>
+        <div ref={notificationRef} tabIndex={-1} role={lastNotification.type === 'success' ? 'status' : 'alert'} className={`mt-3 p-3.5 rounded-xl border flex items-start gap-3 ${lastNotification.type === 'success' ? 'bg-[oklch(0.72_0.17_155/0.12)] border-[oklch(0.72_0.17_155/0.35)] text-[oklch(0.72_0.17_155)]' : lastNotification.type === 'warning' ? 'bg-[oklch(0.80_0.16_75/0.12)] border-[oklch(0.80_0.16_75/0.35)] text-[oklch(0.80_0.16_75)]' : 'bg-[oklch(0.65_0.22_25/0.12)] border-[oklch(0.65_0.22_25/0.35)] text-rose-300'}`}>
           {lastNotification.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" /> : <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />}
           <div className="flex-1 text-sm leading-relaxed"><div className="font-semibold">{lastNotification.title}</div><div className="mt-1">{lastNotification.detail}</div>{lastNotification.document?.uuidSat && onCfdiOpened && <button type="button" onClick={() => onCfdiOpened(lastNotification.document!)} className="mt-3 min-h-11 px-3 rounded-lg border border-current font-semibold focus-visible:outline-2 focus-visible:outline-white">Ver documento</button>}</div>
           <button type="button" aria-label="Cerrar aviso" onClick={() => setLastNotification(null)} className="min-w-11 min-h-11 text-base hover:opacity-100 font-bold px-1">✕</button>

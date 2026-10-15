@@ -31,6 +31,6 @@ export const LandingHero: React.FC<LandingHeroProps> = ({onEnterDemo}) => (
       <h2 className="font-sora font-bold text-xl mb-3">Cada resultado tiene su significado</h2>
       <p className="text-sm leading-relaxed text-[oklch(0.90_0.01_240)]">Guardar un documento, relacionarlo con un movimiento y consultar su estado en el SAT son pasos distintos. FacturIA ya guarda registros por cuenta, lee PDF y fotos y permite la consulta al SAT de un XML desde tu espacio. No emite facturas ni calcula los impuestos que debes pagar. La demo usa estados de ejemplo.</p>
     </section>
-    <footer className="pt-8 border-t border-[oklch(0.30_0.03_260)] text-xs text-[oklch(0.68_0.03_250)]">© 2026 FacturIA · Demostración y piloto de conciliación documental</footer>
+    <footer className="pt-8 border-t border-[oklch(0.30_0.03_260)] text-xs text-[oklch(0.68_0.03_250)]">© 2026 FacturIA · Demostración y piloto para revisar movimientos y documentos</footer>
   </div>
 );

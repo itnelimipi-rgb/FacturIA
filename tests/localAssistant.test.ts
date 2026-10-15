@@ -106,6 +106,11 @@ test('the model receives presence flags and currencies without counts, dates, am
   assert.ok(!user.includes(context.json));
   assert.match(messages[0].content, /No incluyas cifras, fechas, conteos/);
   assert.match(messages[0].content, /No inventes botones/);
+  assert.match(user, /Movimientos permite cargar CSV/);
+  assert.match(user, /Documentos permite cargar XML, PDF o fotos y anotar gastos sin factura/);
+  assert.match(user, /Quitar vínculo en Movimientos/);
+  assert.match(user, /Volver a buscar en Movimientos/);
+  assert.doesNotMatch(user, /Movimientos y documentos/);
 });
 
 test('sensitive fiscal decisions bypass the experimental model', () => {

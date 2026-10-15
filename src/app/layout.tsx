@@ -2,8 +2,8 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'FacturIA · Conciliación documental',
-  description: 'Importa comprobantes XML y movimientos bancarios CSV para revisar su conciliación documental.',
+  title: 'FacturIA · Movimientos y documentos',
+  description: 'Carga tus documentos y los movimientos de tu banco para revisar qué factura corresponde a cada entrada o salida de dinero.',
 };
 export const viewport: Viewport = {width: 'device-width', initialScale: 1};
 

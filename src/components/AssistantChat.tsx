@@ -18,6 +18,7 @@ interface Message {
 }
 
 interface AssistantChatProps {
+  visible?: boolean;
   mode: 'demo' | 'workspace';
   profile: Profile;
   metrics: CashFlowMetrics;
@@ -28,7 +29,7 @@ interface AssistantChatProps {
 // Remount for each account and mode, so private history and the worker cannot cross accounts.
 export const AssistantChat: React.FC<AssistantChatProps> = props => <AssistantSession key={`${props.mode}:${props.profile.id}`} {...props} />;
 
-const AssistantSession: React.FC<AssistantChatProps> = ({ mode, profile, metrics, transactions, cfdis }) => {
+const AssistantSession: React.FC<AssistantChatProps> = ({ mode, profile, metrics, transactions, cfdis, visible = true }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const welcome: Message = { id: 'm-init', sender: 'assistant', text: `Hola, ${profile.businessName}. Puedo ayudarte a entender qué cargaste y qué necesita tu atención: ${metrics.conciliadoCount} movimiento(s) tienen documento vinculado, ${metrics.ambiguoCount} coincidencia(s) necesitan revisión y ${metrics.discrepanciaCount} no tienen documento vinculado.\n\nUso los datos de ${mode === 'demo' ? 'los ejemplos de la demo' : 'tu espacio'}. Los resúmenes se calculan con tus registros; puedes consultarlos sin activar la IA. La consulta al SAT se hace aparte, desde cada documento.` };
   const [input, setInput] = useState('');
@@ -125,10 +126,10 @@ const AssistantSession: React.FC<AssistantChatProps> = ({ mode, profile, metrics
   }
 
   useEffect(() => {
-    if (chatBodyRef.current) {
+    if (visible && chatBodyRef.current?.getClientRects().length) {
       chatBodyRef.current.scrollTop = chatBodyRef.current.scrollHeight;
     }
-  }, [messages, isTyping]);
+  }, [messages, isTyping, visible]);
 
   const sendMessage = async (textToSend: string) => {
     const text = textToSend.trim();

@@ -122,6 +122,10 @@ body {
 .facturia-app #document-upload,
 .facturia-app #bank-upload,
 .facturia-app #workspace-documents,
+.facturia-app #workspace-home,
+.facturia-app #workspace-movements-page,
+.facturia-app #workspace-documents-page,
+.facturia-app #workspace-help,
 .facturia-app #workspace-movements {
   scroll-margin-top: var(--facturia-header-offset, 16px);
 }

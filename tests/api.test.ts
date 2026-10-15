@@ -150,7 +150,7 @@ test('assistant gives concrete ambiguity guidance without claiming the account h
   assert.match(body.reply, /varias facturas posibles/);
   assert.match(body.reply, /factura que coincide con varios movimientos/);
   assert.match(body.reply, /debes decidir/);
-  assert.match(body.reply, /Movimientos y documentos/);
+  assert.match(body.reply, /En Movimientos, abre Revisar coincidencia/);
   assert.match(body.reply, /Revisar coincidencia/);
   assert.match(body.reply, /RFC, fecha, importe y moneda/);
   assert.match(body.reply, /Usar este documento/);
@@ -170,15 +170,16 @@ test('assistant explains discrepancy and documentary reconciliation without offe
 
 test('assistant distinguishes XML, bank CSV and editable provisional PDF or image imports', async () => {
   const cases: [string, RegExp[]][] = [
-    ['¿Cómo importo un XML?', [/archivo XML de la factura/, /se comparan sus datos/, /no confirma por sí solo/]],
-    ['¿Cómo se importa un CSV?', [/Seleccionar archivo CSV/, /vista previa/, /dinero recibido o pagado y moneda/, /no conecta tu banco ni mueve dinero/]],
-    ['¿Cómo importo un PDF?', [/selecciona el PDF o la foto/, /Revisa y corrige el proveedor, RFC/, /gasto provisional/, /No inventes los impuestos/, /no se emite una factura/]],
-    ['¿Cómo importo una imagen?', [/selecciona el PDF o la foto/, /importes detectados/, /gasto provisional/]],
+    ['¿Cómo importo un XML?', [/^En Documentos, agrega/, /archivo XML de la factura/, /se comparan sus datos/, /Después, en Movimientos, revisa/, /no confirma por sí solo/]],
+    ['¿Cómo se importa un CSV?', [/^En Movimientos, usa/, /Seleccionar archivo CSV/, /vista previa/, /dinero recibido o pagado y moneda/, /no conecta tu banco ni mueve dinero/]],
+    ['¿Cómo importo un PDF?', [/^En Documentos, selecciona/, /selecciona el PDF o la foto/, /Revisa y corrige el proveedor, RFC/, /gasto provisional/, /No inventes los impuestos/, /no se emite una factura/]],
+    ['¿Cómo importo una imagen?', [/^En Documentos, selecciona/, /selecciona el PDF o la foto/, /importes detectados/, /gasto provisional/]],
   ];
   for (const [message, checks] of cases) {
     const response = await assistant(request('/api/assistant', {message, mode: 'demo', snapshot}));
     const body = await response.json(); assert.equal(response.status, 200); assert.equal(body.mode, 'rules');
     for (const pattern of checks) assert.match(body.reply, pattern);
+    assert.doesNotMatch(body.reply, /Movimientos y documentos/);
   }
 });
 

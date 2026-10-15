@@ -2,8 +2,7 @@
 
 import React, { useEffect, useId, useRef, useState } from 'react';
 import type { BankTransaction, CfdiRecord, ReconciliationStatus } from '../lib/types';
-import { formatDeclaredAmount } from '../lib/documentSummary';
-import { documentCardLabel, reconciliationExplanation, reconciliationLabels } from '../lib/reconciliationPresentation';
+import { reconciliationExplanation, reconciliationLabels } from '../lib/reconciliationPresentation';
 import { CheckCircle2, HelpCircle, FileText, ArrowDownLeft, ArrowUpRight, ExternalLink, Search, Plus, Unlink } from 'lucide-react';
 
 interface TreasuryInboxProps {
@@ -14,11 +13,22 @@ interface TreasuryInboxProps {
   onUnmatch: (txId: string) => void | Promise<void>;
   onResumeReconciliation?: (txId: string) => void | Promise<void>;
   onRequestUploadForDiscrepancy: (tx: BankTransaction) => void;
-  onOpenRegisterModal?: () => void;
   initialFilter?: 'all' | ReconciliationStatus;
-  focusSection?: 'movements' | 'documents';
-  profileRfc?: string;
+  reviewRequest?: {filter: 'all' | ReconciliationStatus; request: number};
   notice?: string;
+}
+
+export interface MovementView {
+  filter: 'all' | ReconciliationStatus;
+  query: string;
+  handledRequest?: number;
+  clearedSearch?: boolean;
+}
+
+/** Only a new explicit review request replaces the user's current search/filter. */
+export function applyMovementReviewRequest(view: MovementView, request?: TreasuryInboxProps['reviewRequest']): MovementView {
+  if (!request || request.request === view.handledRequest) return view;
+  return {filter: request.filter, query: '', handledRequest: request.request, ...(view.query.trim() ? {clearedSearch: true} : {})};
 }
 
 const money = (value: number, currency: string) => new Intl.NumberFormat('es-MX', {
@@ -27,31 +37,32 @@ const money = (value: number, currency: string) => new Intl.NumberFormat('es-MX'
 
 export const TreasuryInbox: React.FC<TreasuryInboxProps> = ({
   transactions, cfdis, onOpenResolver, onOpenCfdiDetail, onUnmatch, onResumeReconciliation,
-  onRequestUploadForDiscrepancy, onOpenRegisterModal, initialFilter = 'all', focusSection, profileRfc, notice,
+  onRequestUploadForDiscrepancy, initialFilter = 'all', reviewRequest, notice,
 }) => {
-  const [activeTab, setActiveTab] = useState<'all' | ReconciliationStatus>(initialFilter);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [view, setView] = useState<MovementView>(() => ({filter: reviewRequest?.filter ?? initialFilter, query: '', handledRequest: reviewRequest?.request}));
+  const requestedView = applyMovementReviewRequest(view, reviewRequest);
+  if (requestedView !== view) setView(requestedView);
+  const activeTab = requestedView.filter;
+  const searchTerm = requestedView.query;
+  const setActiveTab = (filter: 'all' | ReconciliationStatus) => setView(current => ({...current, filter, clearedSearch: undefined}));
+  const setSearchTerm = (query: string) => setView(current => ({...current, query, clearedSearch: undefined}));
   const [pendingAction, setPendingAction] = useState<{id: string; kind: 'unmatch' | 'resume'} | null>(null);
   const [actionError, setActionError] = useState<{id: string; message: string} | null>(null);
   const pendingRef = useRef(false);
   const returnActionFocus = useRef(false);
   const movementsRef = useRef<HTMLElement>(null);
-  const documentsRef = useRef<HTMLElement>(null);
   const searchId = useId();
-
-  useEffect(() => {
-    if (!focusSection) return;
-    const section = focusSection === 'movements' ? movementsRef.current : documentsRef.current;
-    section?.focus({preventScroll: true});
-    section?.scrollIntoView({block: 'start', behavior: 'auto'});
-  }, [focusSection]);
 
   useEffect(() => {
     if (!pendingAction && returnActionFocus.current) {
       returnActionFocus.current = false;
       if (document.activeElement === document.body) {
-        movementsRef.current?.focus({preventScroll: true});
-        movementsRef.current?.scrollIntoView({block: 'start', behavior: 'auto'});
+        const section = movementsRef.current;
+        // Mounted, hidden panels must not steal focus after an async action completes.
+        if (section?.getClientRects().length) {
+          section.focus({preventScroll: true});
+          section.scrollIntoView({block: 'start', behavior: 'auto'});
+        }
       }
     }
   }, [pendingAction]);
@@ -85,6 +96,7 @@ export const TreasuryInbox: React.FC<TreasuryInboxProps> = ({
   return <div className="w-full space-y-7">
     <section id="workspace-movements" ref={movementsRef} tabIndex={-1} aria-labelledby="workspace-movements-title" className="space-y-4 scroll-mt-24 rounded-xl focus-visible:outline-2 focus-visible:outline-teal-300 focus-visible:outline-offset-4">
       {notice && <p role="status" className="rounded-xl border border-teal-800 bg-teal-950/30 p-4 text-sm text-teal-100">{notice}</p>}
+      {requestedView.clearedSearch && <p role="status" className="rounded-xl border border-slate-600 bg-slate-800 p-3 text-sm text-slate-200">Se limpió tu búsqueda anterior para mostrar los movimientos que pediste.</p>}
       <div>
         <h2 id="workspace-movements-title" className="font-sora text-lg font-bold text-white">Movimientos del banco ({transactions.length})</h2>
         <p className="mt-1 text-sm text-slate-300">Son las entradas y salidas que cargaste desde un archivo. Vincular un documento ayuda a explicar un movimiento; no confirma su estado ante el SAT.</p>
@@ -99,7 +111,6 @@ export const TreasuryInbox: React.FC<TreasuryInboxProps> = ({
           <label htmlFor={searchId} className="min-w-0 flex-1 text-sm text-slate-300">Buscar un movimiento
             <span className="relative mt-1 block"><Search aria-hidden="true" className="absolute left-3 top-3 h-4 w-4 text-slate-400" /><input id={searchId} type="search" placeholder="Descripción, importe, fecha o emisor" value={searchTerm} onChange={event => setSearchTerm(event.target.value)} className="min-h-11 w-full rounded-xl border border-slate-600 bg-slate-900 py-2 pl-10 pr-3 text-sm text-white placeholder:text-slate-400" /></span>
           </label>
-          {onOpenRegisterModal && <button type="button" onClick={onOpenRegisterModal} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-600 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800"><Plus aria-hidden="true" className="h-4 w-4" />Anotar un gasto sin factura</button>}
         </div>
       </div>
 
@@ -135,22 +146,5 @@ export const TreasuryInbox: React.FC<TreasuryInboxProps> = ({
       })}</div>}
     </section>
 
-    <section id="workspace-documents" ref={documentsRef} tabIndex={-1} aria-labelledby="workspace-documents-title" className="space-y-3 scroll-mt-24 rounded-xl border-t border-slate-700 pt-5 focus-visible:outline-2 focus-visible:outline-teal-300 focus-visible:outline-offset-4">
-      <h2 id="workspace-documents-title" className="font-sora text-lg font-bold text-white">Documentos cargados ({cfdis.length})</h2>
-      <p className="text-sm text-slate-300">Estos importes vienen de los documentos. Cargarlos no agrega ni quita dinero en el banco. Abre un documento para revisar sus datos.</p>
-      {cfdis.length === 0 ? <div className="rounded-xl border border-dashed border-slate-600 p-5 text-sm text-slate-300"><p className="font-semibold text-white">Aún no cargaste documentos</p><p className="mt-1">Agrega una factura XML, revisa un PDF o una foto, o anota un gasto mientras consigues su factura.</p></div> : <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{cfdis.map(record => <button key={record.id} type="button" onClick={() => onOpenCfdiDetail(record)} className="flex min-w-0 gap-3 rounded-xl border border-slate-600 bg-slate-900/50 p-4 text-left hover:border-teal-400">
-        <FileText aria-hidden="true" className="mt-1 h-5 w-5 shrink-0 text-teal-300" /><span className="min-w-0 flex-1 space-y-1.5">
-          <span className="block text-sm font-semibold text-white">{documentCardLabel(record, profileRfc)}</span>
-          <span className="block break-words text-sm text-slate-300">Emitido por: {record.nombreEmisor || record.rfcEmisor}</span>
-          <span className="block text-sm text-slate-300">Fecha: {record.fechaEmision.slice(0, 10)}</span>
-          <span className="block break-words text-sm font-semibold text-white">{record.tipoComprobante === 'P' ? record.paymentComplement ? `Pagos indicados en este documento: ${formatDeclaredAmount(record.paymentComplement.totalPaymentsMxn, 'MXN')}` : 'Consulta el importe del pago en el archivo XML' : `Importe del documento: ${money(record.total, record.currency || 'MXN')}`}</span>
-          {record.metodoPago && <span className="block text-xs text-slate-300">Forma indicada en la factura: {record.metodoPago === 'PUE' ? 'pago de una sola vez' : 'pago posterior o en partes'}</span>}
-          {record.relatedCfdis?.length ? <span className="block text-xs text-slate-300">Hace referencia a otros documentos. Puedes verlos en el detalle.</span> : null}
-          {(record.tipoComprobante === 'E' || record.tipoComprobante === 'P') && <span className="block text-xs text-slate-300">Se conserva como referencia; no se vincula automáticamente a un movimiento.</span>}
-          <span className={`block text-xs ${record.statusSat === 'cancelado' ? 'text-rose-200' : 'text-slate-300'}`}>{record.sourceType === 'manual' || record.sourceType === 'pdf' || record.sourceType === 'image' ? 'Anotación pendiente de la factura XML' : record.statusSat === 'no_verificado' ? 'Estado ante el SAT: pendiente de consultar' : record.statusSat === 'cancelado' ? 'Estado registrado: cancelado' : 'Estado registrado: vigente'}</span>
-          <span className="block break-all text-xs text-slate-400">{record.uuidSat ? `Identificador del documento: ${record.uuidSat}` : 'Este registro no tiene un identificador fiscal'}</span>
-        </span><ExternalLink aria-hidden="true" className="mt-1 h-4 w-4 shrink-0 text-slate-300" />
-      </button>)}</div>}
-    </section>
   </div>;
 };
