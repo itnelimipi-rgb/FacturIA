@@ -2,8 +2,8 @@
 
 Fecha: 12 de octubre de 2026. Rama: `sprint-1`.
 Estado: primera iteración publicada y validada localmente y en staging el 13 de
-octubre; navegación separada de la Entrega 2 implementada y comprobada localmente
-el 15 de octubre. Evidencia en `ESTADO_SPRINT_1.md` y `STAGING.md`. El plan completo sigue en curso.
+octubre; navegación separada de la Entrega 2 publicada y comprobada localmente
+y en staging el 15 de octubre. Evidencia en `ESTADO_SPRINT_1.md` y `STAGING.md`. El plan completo sigue en curso.
 Base revisada: código de `8997e09`, demo desplegada y recorridos del frontend.
 
 ## Primera iteración — 13 de octubre
@@ -54,7 +54,9 @@ cambiar de sección, aviso al reemplazarla, comprobante con contexto, XML de
 ejemplo, búsqueda vacía/con resultados, detalle con Escape y foco de regreso,
 Ayuda e ida/vuelta a `Acerca de FacturIA`; sin desbordamiento a 390 y 320 px.
 Pasaron 417 pruebas, lint, tipos, build y auditoría npm sin vulnerabilidades.
-Sigue pendiente la prueba de comprensión del dueño y el resto de entregas.
+En staging (`e096353`) se repitió el recorrido y pasaron 15 comprobaciones HTTPS
+con cuentas anteriores. Sigue pendiente la prueba de comprensión del dueño y el
+resto de entregas.
 
 ## Objetivo y criterio principal
 

@@ -8,7 +8,7 @@ para recursos de todo el workspace.
 
 ## Navegación separada — 15 de octubre
 
-Segunda iteración de la Entrega 2, comprobada localmente:
+Segunda iteración de la Entrega 2, publicada y comprobada localmente y en staging:
 
 - Barra `Inicio`, `Movimientos`, `Documentos` y `Ayuda` con `aria-current` y
   controles de 44 px. Movimientos: carga CSV y lista del banco. Documentos: carga
@@ -29,9 +29,19 @@ con Escape y foco de regreso, pregunta de Ayuda conservada e ida/vuelta a
 `Acerca de FacturIA`. Sin desbordamiento horizontal de página a 390 ni 320 px.
 Validación: **417/417 pruebas**, lint, TypeScript, build y auditoría npm sin
 vulnerabilidades. No cambian motor, estados persistidos, SQL, API ni dependencias.
-Pendientes: publicación y comprobación en staging de esta iteración, prueba de
-comprensión del dueño, mapeo CSV, perfil incompleto, captura simplificada y
-revisión completa de accesibilidad, zoom y dispositivos.
+Publicado como `e096353194ed4a4bb94d7ab4e39ea2fe518f0590`, con
+[CI aprobado](https://github.com/itnelimipi-rgb/FacturIA/actions/runs/38694132368).
+Deployment `64abc79b-8d4f-4298-bf8a-cd300e87faf8`: **SUCCESS**, fijado a ese
+commit, creado por la cuenta del usuario; detalle en `STAGING.md`. Pasaron
+**15 comprobaciones HTTPS** con cuentas anteriores, cinco preguntas de ayuda por
+reglas y el mismo recorrido de interfaz, también a 320 px. Demo reiniciada a seis
+documentos/cinco movimientos (3/1/1). Consumo del workspace leído el 15 de octubre
+a las 00:56 (Ciudad de México): **USD 0.3046**, límite duro **USD 10**, sin excederlo.
+Observación: el aviso «Se restablecieron los datos de ejemplo» sigue visible al
+cambiar de sección hasta la siguiente acción; es comportamiento previo, sin efecto
+en datos. Pendientes: prueba de comprensión del dueño, mapeo CSV, perfil
+incompleto, captura simplificada y revisión completa de accesibilidad, zoom y
+dispositivos.
 
 ## Frontend y experiencia de usuario — 13 de octubre
 

@@ -7,6 +7,38 @@ Railway Agent e impuestos tienen tratamiento independiente: no ejecutar Agent
 ni contratar integraciones adicionales sin revisar el presupuesto.
 También hay PostgreSQL local aislado para desarrollar sin depender de staging.
 
+## Navegación separada — 15 de octubre
+
+Código publicado en `sprint-1` como `e096353194ed4a4bb94d7ab4e39ea2fe518f0590`,
+con autoría y committer de Danipb15, sin coautores. Pasaron **417/417 pruebas**,
+lint, TypeScript, compilación y auditoría npm sin vulnerabilidades.
+[CI aprobado para ese commit](https://github.com/itnelimipi-rgb/FacturIA/actions/runs/38694132368).
+Entre `8609744` y `e096353` no cambian servidor, API, SQL ni dependencias.
+
+El cambio preparado se revisó antes de aplicarlo: sólo `source.commitSha` del
+servicio web en staging, de `8609744` a `e096353`, no destructivo. Deployment
+`64abc79b-8d4f-4298-bf8a-cd300e87faf8`: **SUCCESS**, creado por Danipb15 y
+fijado a ese commit; `/api/health` respondió `ok`/`workspace`.
+
+Comprobaciones HTTPS con cuentas sintéticas anteriores (`--verify-only`): espacio
+4, restauración 4, pendientes 3 y documentos 4; **15 aprobadas**. Dos scripts
+recibieron primero HTTP 429 del límite compartido de inicio de sesión y pasaron
+al repetirse tras esperar, sin debilitar el límite. Pendientes falló una vez porque
+su estado privado esperaba la consulta SAT del 11 de octubre; la cuenta conserva
+una consulta posterior (12 de octubre, 03:48 UTC) con el mismo resultado N602/no
+encontrado/`no_verificado`. Se actualizó sólo esa fecha en la caché ignorada.
+
+Interfaz desplegada: pendientes de Inicio con foco en Movimientos, búsqueda
+conservada entre secciones y limpiada con aviso desde Inicio, comprobante con
+contexto y XML de ejemplo vinculado, búsqueda de documentos, detalle con Escape y
+foco de regreso. Cinco preguntas de ayuda por reglas nombraron Documentos o
+Movimientos; la de ISR devolvió el límite fiscal. Sin desbordamiento a 320 px.
+La demo quedó con seis documentos/cinco movimientos y distribución 3/1/1.
+
+Consumo leído el 15 de octubre a las 00:56 (Ciudad de México): **USD 0.3046**,
+estimado del ciclo USD 2.71, límite duro **USD 10**, sin excederlo. No se
+añadieron servicios, variables, dependencias ni proveedores.
+
 ## Primer uso y revisión comprensible — 13 de octubre
 
 Código publicado en `sprint-1` como `cf56569d88c19be18d845b700666557966a60f28`,
