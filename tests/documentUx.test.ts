@@ -5,8 +5,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { SatStatusControls } from '../src/components/SatStatusControls';
 import { RegisterInvoiceModal } from '../src/components/RegisterInvoiceModal';
 import { CfdiDetailModal } from '../src/components/CfdiDetailModal';
-import { describeImportedXml } from '../src/components/UnifiedDropzone';
-import type { CfdiRecord, SatVerification } from '../src/lib/types';
+import { describeSavedDocument } from '../src/components/UploadCenter';
+import { documentAmountText } from '../src/lib/documentSummary';
+import type { BankTransaction, CfdiRecord, SatVerification } from '../src/lib/types';
 
 const record = (overrides: Partial<CfdiRecord> = {}): CfdiRecord => ({
   id: 'document-1', userId: 'user-1', uuidSat: '550E8400-E29B-41D4-A716-446655440001',
@@ -62,17 +63,26 @@ test('manual expense leaves unknown tax amounts empty and does not display a fab
   assert.ok(html.includes('role="dialog"'));
 });
 
-test('XML import result reports payment complement money instead of the zero XXX XML total', () => {
+test('XML upload results report payment complement money instead of the zero XXX XML total', () => {
   const payment = record({ tipoComprobante: 'P', currency: 'XXX', total: 0, paymentComplement: { version: '2.0', totalPaymentsMxn: '58', payments: [] } });
-  const result = describeImportedXml(payment, false);
-  assert.equal(result.title, 'Documento de pago guardado');
-  assert.ok(result.detail.includes('MXN 58.00'));
-  assert.ok(!result.detail.includes('0.00 XXX'));
-  assert.ok(result.detail.includes('Guardado en tu cuenta'));
-  assert.ok(result.detail.includes('no confirma su estado en el SAT'));
-  const noComplement = describeImportedXml({ ...payment, paymentComplement: undefined }, true);
-  assert.ok(noComplement.detail.includes('el total cero del comprobante no es el monto del pago'));
-  assert.ok(!noComplement.detail.includes('Guardado en tu cuenta'));
+  assert.equal(documentAmountText(payment), 'Pagos por MXN 58.00');
+  assert.equal(documentAmountText({ ...payment, paymentComplement: undefined }), 'Comprobante de pago');
+  assert.match(describeSavedDocument(payment, { transactions: [] }, 'BBB010101BBB'), /No cambia tus movimientos/);
+  assert.match(describeSavedDocument(record({ tipoComprobante: 'E', total: 20 }), { transactions: [] }, 'BBB010101BBB'), /Nota de crédito guardada. No cambia tus movimientos/);
+});
+
+test('upload results describe the link the save produced and explain why a chosen movement did not match', () => {
+  const rfc = 'BBB010101BBB';
+  const invoice = record();
+  const movement: BankTransaction = { id: 'movement-1', userId: 'user-1', accountId: 'account-1', amount: -116, currency: 'MXN', date: '2026-10-12', description: 'Pago proveedor', status: 'discrepancia' };
+  assert.match(describeSavedDocument(invoice, { transactions: [] }, rfc), /Sube tu estado de cuenta/);
+  assert.match(describeSavedDocument(invoice, { transactions: [movement] }, rfc), /Aún no hay un movimiento/);
+  assert.equal(describeSavedDocument(invoice, { transactions: [{ ...movement, status: 'conciliado', matchedCfdiId: invoice.id }] }, rfc), 'Vinculada a «Pago proveedor».');
+  assert.match(describeSavedDocument(invoice, { transactions: [{ ...movement, status: 'ambiguo', candidateCfdiIds: [invoice.id] }] }, rfc), /elige si corresponde/);
+  assert.equal(describeSavedDocument(invoice, { transactions: [{ ...movement, status: 'conciliado', matchedCfdiId: invoice.id }] }, rfc, movement), 'Quedó vinculada a este movimiento.');
+  assert.match(describeSavedDocument(record({ rfcEmisor: rfc, rfcReceptor: 'AAA010101AAA' }), { transactions: [movement] }, rfc, movement), /tú emitiste y este movimiento es un pago/);
+  assert.match(describeSavedDocument(record({ total: 200 }), { transactions: [movement] }, rfc, movement), /no coincide con este movimiento\. El importe difiere/);
+  assert.match(describeSavedDocument(record({ tipoComprobante: 'P', currency: 'XXX', total: 0 }), { transactions: [movement] }, rfc, movement), /sólo una factura se puede vincular/);
 });
 
 test('payment amount precedes technical zero while credit notes do not promise a bank refund', () => {

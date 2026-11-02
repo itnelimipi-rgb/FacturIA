@@ -33,7 +33,7 @@ export function AccountEmailControls({onLogin}: {onLogin?: () => void}) {
     {enabled ? <div className="flex flex-wrap gap-3">
       <button type="button" onClick={() => {setOpen('reset'); setMessage('');}} className="underline">Olvidé mi contraseña</button>
       <button type="button" onClick={() => {setOpen('verify'); setMessage('');}} className="underline">Verificar mi correo</button>
-    </div> : <p className="text-xs text-slate-400">La recuperación de contraseña y verificación de correo necesitan habilitar el servicio de correo del entorno.</p>}
+    </div> : null}
     {open && <form onSubmit={submit} className="space-y-3 rounded-lg border border-slate-600 p-3">
       <p>{open === 'reset' ? 'Solicitar un enlace de recuperación' : 'Solicitar verificación de correo'}</p>
       <label className="block">Correo<input required type="email" name="email" autoComplete="email" maxLength={254} className="mt-1 block w-full rounded-lg border border-slate-600 bg-slate-900 p-2" /></label>

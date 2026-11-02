@@ -1,356 +1,108 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Send, Bot, User } from 'lucide-react';
-import { CashFlowMetrics, BankTransaction, CfdiRecord, Profile } from '../lib/types';
-import type { MLCEngineInterface } from '@mlc-ai/web-llm';
-import { buildLocalAssistantContext, isFiscalDecisionQuestion, isRecordedDataQuestion, isLocalAiUserCancellation, localAssistantMessages, safeLocalAssistantReply,
-  localAiSetupDiagnostic, LocalAiSetupError, withLocalAiDeadline as bounded,
-  LOCAL_AI_MODEL_ID, LOCAL_AI_DOWNLOAD_MB, LOCAL_AI_GPU_MB, LOCAL_AI_FISCAL_LIMIT, MAX_LOCAL_AI_QUESTION_CHARS } from '../lib/localAssistant';
-import type {LocalAiSetupPhase} from '../lib/localAssistant';
+import React, { useEffect, useRef, useState } from 'react';
+import { Bot, Send, Sparkles, User } from 'lucide-react';
+import type { BankTransaction, CfdiRecord, Profile } from '../lib/types';
+import { buildHomeSummary } from '../lib/homeSummary';
+import { ui } from './ui';
 
 interface Message {
   id: string;
   sender: 'user' | 'assistant';
   text: string;
-  localAi?: boolean;
-  rules?: boolean;
+  ai?: boolean;
 }
 
 interface AssistantChatProps {
   visible?: boolean;
   mode: 'demo' | 'workspace';
   profile: Profile;
-  metrics: CashFlowMetrics;
   transactions: BankTransaction[];
   cfdis: CfdiRecord[];
+  aiEnabled?: boolean;
 }
 
-// Remount for each account and mode, so private history and the worker cannot cross accounts.
+const MAX_QUESTION_CHARS = 1200;
+const suggestions = ['¿Qué tengo pendiente?', '¿Cuánto entró y salió?', '¿Cómo subo mi estado de cuenta?', '¿Qué significa «Elige la factura»?'];
+
+// Remount for each account and mode, so private history cannot cross accounts.
 export const AssistantChat: React.FC<AssistantChatProps> = props => <AssistantSession key={`${props.mode}:${props.profile.id}`} {...props} />;
 
-const AssistantSession: React.FC<AssistantChatProps> = ({ mode, profile, metrics, transactions, cfdis, visible = true }) => {
+const AssistantSession: React.FC<AssistantChatProps> = ({ mode, profile, transactions, cfdis, visible = true, aiEnabled = false }) => {
   const [messages, setMessages] = useState<Message[]>([]);
-  const welcome: Message = { id: 'm-init', sender: 'assistant', text: `Hola, ${profile.businessName}. Puedo ayudarte a entender qué cargaste y qué necesita tu atención: ${metrics.conciliadoCount} movimiento(s) tienen documento vinculado, ${metrics.ambiguoCount} coincidencia(s) necesitan revisión y ${metrics.discrepanciaCount} no tienen documento vinculado.\n\nUso los datos de ${mode === 'demo' ? 'los ejemplos de la demo' : 'tu espacio'}. Los resúmenes se calculan con tus registros; puedes consultarlos sin activar la IA. La consulta al SAT se hace aparte, desde cada documento.` };
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const chatBodyRef = useRef<HTMLDivElement>(null);
   const sendingRef = useRef(false);
-  const controllerRef = useRef<AbortController | null>(null);
-  const workerRef = useRef<Worker | null>(null);
-  const engineRef = useRef<MLCEngineInterface | null>(null);
   const mountedRef = useRef(true);
-  const loadingRef = useRef(false);
-  const [aiState, setAiState] = useState<'rules' | 'loading' | 'ready'>('rules');
-  const [progress, setProgress] = useState(0);
-  const [aiError, setAiError] = useState('');
-  const computed = useMemo(() => {
-    try { return {context: buildLocalAssistantContext({profile, transactions, cfdis}), error: ''}; }
-    catch { return {context: null, error: 'No se pudo preparar un resumen validado para la IA local.'}; }
-  }, [profile, transactions, cfdis]);
-  const context = computed.context;
+  const usesAi = aiEnabled && mode === 'workspace';
+  const pending = buildHomeSummary(transactions, cfdis, profile.rfc).pending.length;
+  const welcome = `Hola, ${profile.businessName}. Pregúntame qué tienes pendiente, cuánto entró o salió, o cómo hacer algo en FacturIA.${pending ? ` Ahora mismo ${pending === 1 ? 'hay 1 movimiento' : `hay ${pending} movimientos`} esperando tu atención.` : ''}`;
 
-  function destroyLocalEngine() {
-    controllerRef.current?.abort();
-    controllerRef.current = null;
-    engineRef.current?.interruptGenerate();
-    if (engineRef.current) void engineRef.current.unload().catch(() => {});
-    engineRef.current = null;
-    // Termination destroys the engine and interrupts pending downloads/generation.
-    workerRef.current?.terminate();
-    workerRef.current = null;
-  }
-
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
   useEffect(() => {
-    mountedRef.current = true;
-    return () => { mountedRef.current = false; destroyLocalEngine(); };
-  }, []);
-
-  async function activateLocalAi() {
-    if (loadingRef.current || sendingRef.current || engineRef.current || !context) return;
-    loadingRef.current = true;
-    setAiError(''); setProgress(0); setAiState('loading');
-    const controller = new AbortController();
-    controllerRef.current = controller;
-    let phase: LocalAiSetupPhase = 'adapter';
-    try {
-      const gpu = (navigator as Navigator & {gpu?: {requestAdapter(): Promise<{features: {has(value: string): boolean}} | null>}}).gpu;
-      if (!window.isSecureContext || !gpu) throw new LocalAiSetupError('gpu');
-      const adapter = await bounded(gpu.requestAdapter(), controller.signal, 10_000);
-      if (!adapter || !adapter.features.has('shader-f16')) throw new LocalAiSetupError('gpu');
-      phase = 'module';
-      const webllm = await bounded(import('@mlc-ai/web-llm'), controller.signal, 30_000);
-      if (controller.signal.aborted || !mountedRef.current) return;
-      phase = 'catalog';
-      const model = webllm.prebuiltAppConfig.model_list.find(record => record.model_id === LOCAL_AI_MODEL_ID);
-      if (!model || model.model !== `https://huggingface.co/mlc-ai/${LOCAL_AI_MODEL_ID}` ||
-          !model.model_lib.startsWith('https://raw.githubusercontent.com/mlc-ai/binary-mlc-llm-libs/main/web-llm-models/v0_2_86/')) throw new LocalAiSetupError('model_config');
-      phase = 'model';
-      const worker = new Worker(new URL('../lib/localAssistant.worker.ts', import.meta.url), {type: 'module', name: 'facturia-local-ai'});
-      workerRef.current = worker;
-      worker.onerror = () => { controllerRef.current?.abort(new LocalAiSetupError('unknown')); };
-      const engine = new webllm.WebWorkerMLCEngine(worker, {appConfig: {model_list: [model], cacheBackend: 'cache'}, logLevel: 'ERROR',
-        initProgressCallback: report => { if (mountedRef.current && !controller.signal.aborted) setProgress(Number.isFinite(report.progress) ? Math.min(100, Math.max(0, Math.round(report.progress * 100))) : 0); }});
-      engineRef.current = engine;
-      await bounded(engine.reload(LOCAL_AI_MODEL_ID, {context_window_size: 4096}), controller.signal, 300_000);
-      if (controller.signal.aborted || !mountedRef.current) return;
-      controllerRef.current = null; setAiState('ready'); setProgress(100);
-    } catch (error) {
-      const ownsOperation = controllerRef.current === controller;
-      const diagnostic = localAiSetupDiagnostic(error);
-      if (ownsOperation) destroyLocalEngine();
-      if (mountedRef.current && ownsOperation) {
-        // No raw worker errors, URLs, questions, financial data or secrets are logged.
-        console.warn(JSON.stringify({code: diagnostic.code, phase}));
-        setAiState('rules');
-        setAiError(diagnostic.message);
-      }
-    } finally { if (controllerRef.current === controller || controllerRef.current === null) loadingRef.current = false; }
-  }
-
-  function switchToRules() {
-    destroyLocalEngine(); loadingRef.current = false; setAiState('rules'); setProgress(0);
-  }
-
-  async function answerWithRules(message: string, signal: AbortSignal): Promise<string> {
-    const response = await fetch('/api/assistant', {
-      method: 'POST', signal, headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({message, mode,
-        ...(mode === 'demo' ? {snapshot: {profile, transactions, cfdis: cfdis.map(record => ({...record, rawXml: undefined}))}} : {}),
-      }),
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(typeof data.error === 'string' ? data.error : 'No se pudo consultar el asistente.');
-    if (typeof data.reply !== 'string' || !data.reply) throw new Error('El asistente devolvió una respuesta vacía.');
-    return data.reply;
-  }
-
-  useEffect(() => {
-    if (visible && chatBodyRef.current?.getClientRects().length) {
-      chatBodyRef.current.scrollTop = chatBodyRef.current.scrollHeight;
-    }
+    if (visible && chatBodyRef.current?.getClientRects().length) chatBodyRef.current.scrollTop = chatBodyRef.current.scrollHeight;
   }, [messages, isTyping, visible]);
 
   const sendMessage = async (textToSend: string) => {
     const text = textToSend.trim();
-    if (!text || text.length > MAX_LOCAL_AI_QUESTION_CHARS || sendingRef.current || loadingRef.current) return;
+    if (!text || text.length > MAX_QUESTION_CHARS || sendingRef.current) return;
     sendingRef.current = true;
-
-    const userMsg: Message = {
-      id: `u-${crypto.randomUUID()}`,
-      sender: 'user',
-      text
-    };
-
-    setMessages((prev) => [...prev, userMsg]);
+    const history = messages.slice(-6).map(message => ({role: message.sender, text: message.text}));
+    setMessages(previous => [...previous, {id: `u-${crypto.randomUUID()}`, sender: 'user', text}]);
     setInput('');
     setIsTyping(true);
     const controller = new AbortController();
-    controllerRef.current = controller;
-    const useLocal = aiState === 'ready' && engineRef.current && context && !isRecordedDataQuestion(text);
-    const timeout = setTimeout(() => controller.abort(new LocalAiSetupError('timeout')), useLocal ? 100_000 : 30_000);
-
+    const timeout = setTimeout(() => controller.abort(), 45_000);
     try {
-      if (useLocal && engineRef.current && context) {
-        let reply: string;
-        let localAi = false;
-        if (isFiscalDecisionQuestion(text)) reply = LOCAL_AI_FISCAL_LIMIT;
-        else {
-          const engine = engineRef.current;
-          await bounded(engine.resetChat(), controller.signal, 10_000);
-          const generated = await bounded(engine.chat.completions.create({messages: localAssistantMessages(text, context),
-            max_tokens: 256, temperature: 0.1, top_p: 0.8, stream: false, extra_body: {resumable: {enabled: false}}}), controller.signal, 90_000);
-          reply = safeLocalAssistantReply(generated.choices[0]?.message.content ?? '', context, text);
-          localAi = true;
-        }
-        if (mountedRef.current && !controller.signal.aborted) setMessages(previous => [...previous, {id: `a-${crypto.randomUUID()}`, sender: 'assistant', text: reply, localAi, rules: !localAi}]);
-        return;
-      }
-      const reply = await answerWithRules(text, controller.signal);
-
-      if (mountedRef.current && !controller.signal.aborted) setMessages((prev) => [
-        ...prev,
-        {
-          id: `a-${crypto.randomUUID()}`,
-          sender: 'assistant',
-          text: reply, rules: true,
-        }
-      ]);
+      const response = await fetch('/api/assistant', {
+        method: 'POST', signal: controller.signal, headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({message: text, mode, history,
+          ...(mode === 'demo' ? {snapshot: {profile, transactions, cfdis: cfdis.map(record => ({...record, rawXml: undefined}))}} : {}),
+        }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || typeof data?.reply !== 'string' || !data.reply) throw new Error(typeof data?.error === 'string' ? data.error : 'No se pudo consultar el asistente.');
+      if (mountedRef.current) setMessages(previous => [...previous, {id: `a-${crypto.randomUUID()}`, sender: 'assistant', text: data.reply, ai: data.generatedByAI === true}]);
     } catch (error) {
-      if (!mountedRef.current) return;
-      const wasLocal = !!useLocal;
-      const wasCancelled = isLocalAiUserCancellation(controller.signal);
-      if (wasLocal) {
-        switchToRules();
-        if (!wasCancelled) {
-          const fallback = new AbortController();
-          controllerRef.current = fallback;
-          const deadline = setTimeout(() => fallback.abort(), 30_000);
-          try {
-            const reply = await answerWithRules(text, fallback.signal);
-            if (mountedRef.current && !fallback.signal.aborted) setMessages(previous => [...previous, {
-              id: `a-${crypto.randomUUID()}`, sender: 'assistant', rules: true,
-              text: `No se pudo usar la explicación de la IA. Esta respuesta se obtuvo de tus registros y la ayuda de FacturIA.\n\n${reply}`,
-            }]);
-            return;
-          } catch { /* Keep a controlled notice if the rules request also fails. */ }
-          finally {clearTimeout(deadline); if (controllerRef.current === fallback) controllerRef.current = null;}
-        }
-      }
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `a-${crypto.randomUUID()}`,
-          sender: 'assistant',
-          text: wasLocal ? wasCancelled ? 'La respuesta local se canceló. Puedes seguir usando reglas.' : 'No se pudo completar el resumen. Consulta las cifras calculadas o vuelve a intentarlo.' : controller.signal.aborted ? 'La consulta se interrumpió o tardó demasiado. Intenta nuevamente.' : error instanceof Error ? error.message : 'No se pudo consultar el asistente. Intenta nuevamente.'
-        }
-      ]);
+      if (mountedRef.current) setMessages(previous => [...previous, {id: `a-${crypto.randomUUID()}`, sender: 'assistant',
+        text: controller.signal.aborted ? 'La respuesta tardó demasiado. Intenta de nuevo.' : error instanceof Error ? error.message : 'No se pudo consultar el asistente. Intenta de nuevo.'}]);
     } finally {
       clearTimeout(timeout);
       sendingRef.current = false;
-      if (controllerRef.current === controller) controllerRef.current = null;
       if (mountedRef.current) setIsTyping(false);
     }
   };
 
-  const suggestions = [
-    '¿Qué necesita mi atención?',
-    'Resume mis movimientos bancarios',
-    '¿Cómo reviso una coincidencia?',
-    '¿Qué verificaciones fiscales están disponibles?'
-  ];
-
-  return (
-    <div className="bg-[oklch(0.21_0.025_260)] border border-[oklch(0.30_0.03_260)] rounded-2xl flex flex-col h-[850px] max-h-[90vh] overflow-hidden shadow-2xl">
-      {/* Head */}
-      <div className="px-5 py-4 border-b border-[oklch(0.30_0.03_260)] bg-[oklch(0.18_0.02_260)] flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-linear-to-tr from-[oklch(0.78_0.15_195)] to-[oklch(0.65_0.20_295)] flex items-center justify-center text-[oklch(0.15_0.03_260)] shadow-glow">
-            <Bot className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="font-sora font-bold text-sm text-[oklch(0.97_0.01_240)]">
-              Asistente FacturIA
-            </div>
-            <div className="text-[11px] text-[oklch(0.72_0.17_155)] flex items-center gap-1.5 font-medium">
-              <span className="w-2 h-2 rounded-full bg-[oklch(0.72_0.17_155)] animate-pulse"></span>
-              {aiState === 'ready' ? 'Explicaciones con IA experimental' : aiState === 'loading' ? 'Preparando IA en tu dispositivo' : 'Ayuda y resúmenes de tus registros'}
-            </div>
-          </div>
-        </div>
-        <span className="text-[11px] font-mono px-2.5 py-1 rounded-full bg-[oklch(0.24_0.028_260)] border border-[oklch(0.30_0.03_260)] text-[oklch(0.68_0.03_250)]">
-          {aiState === 'ready' ? 'IA en este dispositivo' : 'Sin activar IA'}
-        </span>
+  return <div className={`${ui.card} flex h-[70vh] min-h-[28rem] max-h-[52rem] flex-col overflow-hidden`}>
+    <div className="flex items-center justify-between gap-3 border-b border-white/10 bg-[oklch(0.18_0.02_260)] px-5 py-3">
+      <div className="flex items-center gap-3">
+        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-linear-to-tr from-[oklch(0.78_0.15_195)] to-[oklch(0.65_0.20_295)] text-[oklch(0.15_0.03_260)] shadow-glow"><Bot aria-hidden="true" className="h-5 w-5" /></span>
+        <div><p className="font-sora text-sm font-bold text-white">Asistente FacturIA</p><p className="text-xs text-slate-400">{usesAi ? 'Con IA (Claude) y los datos de tu cuenta' : 'Respuestas con los datos que subiste'}</p></div>
       </div>
-
-      <details className="px-5 py-3 border-b border-[oklch(0.30_0.03_260)] text-sm space-y-2">
-        <summary className="font-semibold cursor-pointer">Opcional: explicaciones con IA en este dispositivo</summary>
-        <p>IA local opcional: descarga aproximada de {LOCAL_AI_DOWNLOAD_MB} MB desde Hugging Face y MLC; requiere WebGPU y aproximadamente {LOCAL_AI_GPU_MB} MB de memoria GPU. Las explicaciones de la IA se generan en este dispositivo; las preguntas no se envían a un proveedor de IA.</p>
-        <div className="flex flex-wrap gap-2">
-          {aiState === 'rules' && <button type="button" disabled={isTyping || !context} onClick={() => void activateLocalAi()} className="rounded-lg border border-[oklch(0.78_0.15_195)] px-3 py-1.5 disabled:opacity-50">Activar IA local (descarga modelo)</button>}
-          {aiState !== 'rules' && <button type="button" onClick={switchToRules} className="rounded-lg border border-[oklch(0.40_0.03_260)] px-3 py-1.5">{aiState === 'loading' ? 'Cancelar descarga y usar ayuda sin IA' : 'Desactivar IA y usar ayuda sin IA'}</button>}
-          {isTyping && <button type="button" onClick={() => { controllerRef.current?.abort(); if (aiState === 'ready') switchToRules(); }} className="rounded-lg border border-[oklch(0.40_0.03_260)] px-3 py-1.5">Cancelar respuesta</button>}
-        </div>
-        {aiState === 'loading' && <div role="status"><progress max={100} value={progress} aria-label="Preparación de IA local" className="w-full" /><span>Preparación: {progress}%. La primera carga puede tardar varios minutos.</span></div>}
-        {(aiError || computed.error) && <p role="alert" className="text-amber-300">{aiError || computed.error}</p>}
-        <p className="text-amber-200">La IA explica cómo revisar los estados y puede equivocarse. Las cifras se calculan a partir de tus registros. Las decisiones fiscales requieren revisión contable.</p>
-      </details>
-      {context && <details className="px-5 py-2 border-b border-[oklch(0.30_0.03_260)] text-sm max-h-44 overflow-y-auto">
-        <summary className="cursor-pointer font-semibold">Ver datos del resumen: {context.counts.matched} vinculados, {context.counts.ambiguous} por revisar, {context.counts.unlinked} sin documento</summary>
-        <div className="mt-2 space-y-1">
-          {context.metrics.map(metric => <p key={metric.currency}>{metric.currency}: dinero que entró {metric.income.toFixed(2)}, dinero que salió {metric.expense.toFixed(2)}, diferencia {metric.importedNet.toFixed(2)}, impuestos retenidos según documentos {metric.documentedWithholdings.toFixed(2)}.</p>)}
-          {context.omittedCurrencies > 0 && <p>{context.omittedCurrencies} moneda(s) adicionales fuera del contexto local. No se convierten divisas.</p>}
-          {context.references.map(reference => <p key={reference.label}>{reference.label}: {reference.date}, {reference.amount.toFixed(2)} {reference.currency} • {reference.state}</p>)}
-          <p className="text-[oklch(0.68_0.03_250)]">Referencias parciales de tus registros recientes. El neto importado no representa el saldo real del banco.</p>
-        </div>
-      </details>}
-      {/* Body de Conversación */}
-      <div ref={chatBodyRef} className="flex-1 min-h-24 overflow-y-auto p-5 space-y-4">
-        {[welcome, ...messages].map((m) => (
-          <div
-            key={m.id}
-            className={`flex items-start gap-2.5 max-w-[85%] ${
-              m.sender === 'user' ? 'ml-auto flex-row-reverse' : 'mr-auto'
-            }`}
-          >
-            <div
-              className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold ${
-                m.sender === 'user'
-                  ? 'bg-linear-to-r from-[oklch(0.78_0.15_195)] to-[oklch(0.65_0.20_295)] text-[oklch(0.15_0.03_260)]'
-                  : 'bg-[oklch(0.24_0.028_260)] border border-[oklch(0.30_0.03_260)] text-[oklch(0.78_0.15_195)]'
-              }`}
-            >
-              {m.sender === 'user' ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
-            </div>
-
-            <div
-              className={`px-4 py-3 rounded-2xl text-xs sm:text-[13px] leading-relaxed ${
-                m.sender === 'user'
-                  ? 'bg-linear-to-r from-[oklch(0.78_0.15_195)] to-[oklch(0.65_0.20_295)] text-[oklch(0.15_0.03_260)] font-medium rounded-br-none shadow-md'
-                  : 'bg-[oklch(0.18_0.02_260)] border border-[oklch(0.30_0.03_260)] text-[oklch(0.97_0.01_240)] rounded-bl-none shadow-xs'
-              }`}
-            >
-              {m.localAi && <p className="text-[10px] text-amber-200 mb-1">Generado por IA local experimental</p>}
-              {m.rules && <p className="text-sm text-teal-200 mb-1">Respuesta basada en tus registros y la ayuda de FacturIA</p>}
-              <div className="whitespace-pre-wrap break-words">{m.text.split(/(\*\*[^*]+\*\*)/g).map((part, index) => part.startsWith('**') && part.endsWith('**') ? <strong key={index}>{part.slice(2, -2)}</strong> : <React.Fragment key={index}>{part}</React.Fragment>)}</div>
-            </div>
-          </div>
-        ))}
-
-        {isTyping && (
-          <div className="flex items-center gap-2 mr-auto">
-            <div className="w-7 h-7 rounded-lg bg-[oklch(0.24_0.028_260)] border border-[oklch(0.30_0.03_260)] text-[oklch(0.78_0.15_195)] flex items-center justify-center text-xs">
-              <Bot className="w-4 h-4" />
-            </div>
-            <div className="bg-[oklch(0.18_0.02_260)] border border-[oklch(0.30_0.03_260)] px-4 py-2.5 rounded-2xl rounded-bl-none flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-[oklch(0.68_0.03_250)] typing-dot"></span>
-              <span className="w-2 h-2 rounded-full bg-[oklch(0.68_0.03_250)] typing-dot"></span>
-              <span className="w-2 h-2 rounded-full bg-[oklch(0.68_0.03_250)] typing-dot"></span>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Sugerencias Rápidas */}
-      <div className="px-5 py-2 flex items-center gap-2 overflow-x-auto scrollbar-none bg-[oklch(0.18_0.02_260)]/60 border-t border-[oklch(0.30_0.03_260)]">
-        {suggestions.map((s) => (
-          <button
-            key={s}
-            type="button"
-            disabled={isTyping || aiState === 'loading'}
-            onClick={() => void sendMessage(s)}
-            className="text-[11px] whitespace-nowrap px-3 py-1.5 rounded-full bg-[oklch(0.21_0.025_260)] border border-[oklch(0.30_0.03_260)] hover:border-[oklch(0.78_0.15_195)] hover:text-white text-[oklch(0.68_0.03_250)] transition-colors disabled:opacity-50"
-          >
-            {s}
-          </button>
-        ))}
-      </div>
-
-      {/* Input */}
-      <div className="p-3.5 bg-[oklch(0.18_0.02_260)] border-t border-[oklch(0.30_0.03_260)] flex items-center gap-2">
-        <input
-          type="text"
-          placeholder="Pregunta por tus movimientos, comprobantes o pendientes..."
-          aria-label="Pregunta para el asistente"
-          maxLength={MAX_LOCAL_AI_QUESTION_CHARS}
-          disabled={aiState === 'loading'}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') { e.preventDefault(); void sendMessage(input); }
-          }}
-          className="flex-1 bg-[oklch(0.21_0.025_260)] border border-[oklch(0.30_0.03_260)] rounded-full px-4 py-2.5 text-xs sm:text-sm text-[oklch(0.97_0.01_240)] placeholder:text-[oklch(0.68_0.03_250)] focus:outline-hidden focus:border-[oklch(0.78_0.15_195)]"
-        />
-        <button
-          type="button"
-          aria-label="Enviar pregunta"
-          disabled={isTyping || aiState === 'loading' || !input.trim()}
-          onClick={() => void sendMessage(input)}
-          className="w-10 h-10 rounded-full bg-linear-to-r from-[oklch(0.78_0.15_195)] to-[oklch(0.65_0.20_295)] text-[oklch(0.15_0.03_260)] flex items-center justify-center shrink-0 shadow-glow hover:brightness-105 transition-all disabled:opacity-50"
-        >
-          <Send className="w-4 h-4" />
-        </button>
-      </div>
+      {usesAi && <span className="inline-flex items-center gap-1 rounded-full border border-cyan-800/60 bg-cyan-950/40 px-2.5 py-1 text-xs text-cyan-100"><Sparkles aria-hidden="true" className="h-3.5 w-3.5" />IA</span>}
     </div>
-  );
+
+    <div ref={chatBodyRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5" aria-live="polite">
+      {[{id: 'welcome', sender: 'assistant' as const, text: welcome}, ...messages].map(message => <div key={message.id} className={`flex max-w-[88%] items-start gap-2.5 ${message.sender === 'user' ? 'ml-auto flex-row-reverse' : 'mr-auto'}`}>
+        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${message.sender === 'user' ? 'bg-cyan-200 text-slate-950' : 'border border-white/10 bg-white/5 text-cyan-200'}`}>{message.sender === 'user' ? <User aria-hidden="true" className="h-4 w-4" /> : <Bot aria-hidden="true" className="h-4 w-4" />}</span>
+        <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${message.sender === 'user' ? 'rounded-br-none bg-cyan-200 text-slate-950' : 'rounded-bl-none border border-white/10 bg-[oklch(0.18_0.02_260)] text-slate-100'}`}>
+          <span className="sr-only">{message.sender === 'user' ? 'Tú: ' : 'Asistente: '}</span>
+          <div className="whitespace-pre-wrap break-words">{message.text.split(/(\*\*[^*]+\*\*)/g).map((part, index) => part.startsWith('**') && part.endsWith('**') ? <strong key={index}>{part.slice(2, -2)}</strong> : <React.Fragment key={index}>{part}</React.Fragment>)}</div>
+          {message.ai && <p className="mt-2 text-xs text-slate-400">Respuesta generada con IA; puede equivocarse.</p>}
+        </div>
+      </div>)}
+      {isTyping && <p role="status" className="flex items-center gap-1.5 text-sm text-slate-400"><span className="typing-dot h-2 w-2 rounded-full bg-slate-400" /><span className="typing-dot h-2 w-2 rounded-full bg-slate-400" /><span className="typing-dot h-2 w-2 rounded-full bg-slate-400" /><span className="sr-only">El asistente está escribiendo</span></p>}
+    </div>
+
+    <div className="flex gap-2 overflow-x-auto border-t border-white/10 px-4 py-2">
+      {suggestions.map(suggestion => <button key={suggestion} type="button" disabled={isTyping} onClick={() => void sendMessage(suggestion)}
+        className={`shrink-0 whitespace-nowrap rounded-full border border-white/15 px-3 py-1.5 text-sm text-slate-300 transition hover:border-cyan-300 hover:text-white disabled:opacity-50 ${ui.focus}`}>{suggestion}</button>)}
+    </div>
+    <form className="flex items-center gap-2 border-t border-white/10 bg-[oklch(0.18_0.02_260)] p-3" onSubmit={event => { event.preventDefault(); void sendMessage(input); }}>
+      <input type="text" value={input} onChange={event => setInput(event.target.value)} maxLength={MAX_QUESTION_CHARS} aria-label="Escribe tu pregunta"
+        placeholder="Escribe tu pregunta…" className={`${ui.input} mt-0 flex-1 rounded-full`} />
+      <button type="submit" aria-label="Enviar pregunta" disabled={isTyping || !input.trim()} className={`${ui.primary} h-11 w-11 rounded-full px-0`}><Send aria-hidden="true" className="h-4 w-4" /></button>
+    </form>
+  </div>;
 };

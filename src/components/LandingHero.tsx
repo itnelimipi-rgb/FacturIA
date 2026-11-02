@@ -5,10 +5,10 @@ import React from 'react';
 interface LandingHeroProps { onEnterDemo: () => void }
 
 const capabilities = [
-  {icon: '📄', title: 'Tus facturas y documentos', text: 'Agrega el XML de una factura. Si tienes un PDF o una foto, revisa sus datos para anotar un gasto provisional.'},
-  {icon: '🏦', title: 'El dinero que entró y salió', text: 'Carga los movimientos en un archivo CSV y revisa la vista previa antes de guardarlos. Esta carga no conecta tu banco.'},
-  {icon: '🔗', title: 'Encuentra qué corresponde', text: 'Compara movimientos con documentos. Revisa las coincidencias cuando la aplicación necesita que elijas.'},
-  {icon: '💬', title: 'Ayuda para entender tus registros', text: 'Consulta resúmenes y guías sin configurar IA. También puedes activar explicaciones con IA experimental en tu dispositivo.'},
+  {icon: '📄', title: 'Sube todo junto', text: 'Facturas XML, PDF o fotos de tickets y el estado de cuenta del banco, varios a la vez y desde un solo botón.'},
+  {icon: '🏦', title: 'El dinero que entró y salió', text: 'Leemos el CSV de tu banco y te mostramos una vista previa. Si una fila tiene un error, la corriges ahí mismo. No se conecta tu banco.'},
+  {icon: '🔗', title: 'Cada pago con su factura', text: 'Juntamos cada factura con el movimiento del mismo importe y fecha. Sólo te pedimos elegir cuando hay dudas.'},
+  {icon: '💬', title: 'Un asistente que conoce tus datos', text: 'Pregunta qué tienes pendiente o cómo hacer algo. En tu cuenta, la IA también lee tus tickets por ti.'},
 ];
 
 export const LandingHero: React.FC<LandingHeroProps> = ({onEnterDemo}) => (

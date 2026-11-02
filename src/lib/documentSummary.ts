@@ -1,4 +1,5 @@
 import type { CfdiRecord } from './types';
+import { formatMoney } from './format';
 
 export const documentTypeLabel = (record: Pick<CfdiRecord, 'tipoComprobante' | 'sourceType'>): string => {
   if (record.sourceType === 'manual') return 'Gasto provisional';
@@ -18,6 +19,12 @@ export const formatDeclaredAmount = (amount: string, currency: string): string =
   const [whole, fraction = ''] = amount.split('.');
   const grouped = whole.replace(/^0+(?=\d)/, '').replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   return `${currency} ${grouped}.${fraction.padEnd(2, '0')}`;
+};
+
+/** The money a document states: a payment's declared total, never the zero XXX total of its XML. */
+export const documentAmountText = (record: CfdiRecord): string => {
+  if (record.tipoComprobante === 'P') return record.paymentComplement ? `Pagos por ${formatDeclaredAmount(record.paymentComplement.totalPaymentsMxn, 'MXN')}` : 'Comprobante de pago';
+  return formatMoney(record.total, record.currency || 'MXN');
 };
 
 export interface XmlDocumentSummary {

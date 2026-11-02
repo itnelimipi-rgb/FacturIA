@@ -1,10 +1,18 @@
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
 import { CfdiPaymentComplement, CfdiRecord, CfdiRelation } from './types';
 
+/** Who issued and received the CFDI, with the tax regime each one declared (CFDI 4.0 receptor only). */
+export interface CfdiParty {
+  rfc: string;
+  name: string;
+  regime: string;
+}
+
 export interface ParsedCfdiResult {
   success: boolean;
   cfdi?: CfdiRecord;
   error?: string;
+  parties?: { emisor: CfdiParty; receptor: CfdiParty };
   deterministicMathValidation?: {
     subtotal: number;
     ivaCalculado: number;
@@ -506,9 +514,14 @@ export class XmlCfdiParser {
         relatedCfdis,
         paymentComplement,
       };
+      const regime = (node: XmlNode, name: string) => /^\d{3}$/.test(attr(node, name).trim()) ? attr(node, name).trim() : '';
       return {
         success: true,
         cfdi,
+        parties: {
+          emisor: { rfc: rfcEmisor, name: nombreEmisor, regime: regime(emisor.node, 'RegimenFiscal') },
+          receptor: { rfc: rfcReceptor, name: nombreReceptor, regime: regime(receptor.node, 'RegimenFiscalReceptor') },
+        },
         deterministicMathValidation: {
           subtotal,
           ivaCalculado: cfdi.iva,
