@@ -88,6 +88,8 @@ descargas y cierre de sesión. La lectura con Claude se probó con respuestas gr
 - Vincular manualmente un ticket/PDF a un movimiento (hoy sólo se vinculan XML).
 - Guardar un ticket que sólo muestra el total (el servidor exige el desglose).
 - Asignar columnas a mano cuando un CSV no tiene encabezados reconocibles; leer `.xlsx`.
-- `npm audit` reporta vulnerabilidades previas en `next` (crítica), `zod`, `nodemailer`
-  y `eslint`; corregirlas en un cambio aparte.
+- Next.js se actualizó a 16.4.3 y zod a 4.6.7 por avisos de seguridad (RCE y DoS en
+  Next ≤ 16.4.0; memoria en zod < 4.6.6). Queda `nodemailer` 10.1.0 (moderada, correo
+  aún desactivado; la corrección 10.3.1 sale del rango fijado) y avisos de desarrollo
+  en `eslint`.
 - La prueba de comprensión con usuarios nuevos sigue siendo la validación real.
