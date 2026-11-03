@@ -28,13 +28,14 @@ function recordingClient(response: unknown) {
 }
 
 test('AI stays off without a server key, and the extraction route refuses before reading any file', async () => {
-  await withEnvironment({ANTHROPIC_API_KEY: undefined}, async () => {
+  // Deploy builds expose the service variables, including the public origin; requests here use the test origin.
+  await withEnvironment({ANTHROPIC_API_KEY: undefined, BETTER_AUTH_URL: undefined}, async () => {
     assert.equal(aiConfigured(), false);
     const response = await extract(new Request('http://localhost:3000/api/ai/extract', {method: 'POST', headers: {origin: 'http://localhost:3000', 'content-type': 'multipart/form-data; boundary=x'}, body: 'x'}));
     assert.equal(response.status, 404);
     assert.equal((await features().json()).aiEnabled, false);
   });
-  await withEnvironment({ANTHROPIC_API_KEY: 'test-key-not-real'}, async () => {
+  await withEnvironment({ANTHROPIC_API_KEY: 'test-key-not-real', BETTER_AUTH_URL: undefined}, async () => {
     assert.equal(aiConfigured(), true);
     assert.equal((await features().json()).aiEnabled, true);
     const foreign = await extract(new Request('http://localhost:3000/api/ai/extract', {method: 'POST', headers: {origin: 'https://other.example', 'content-type': 'multipart/form-data; boundary=x'}, body: 'x'}));
@@ -54,7 +55,10 @@ test('receipt extraction sends the original file and keeps only verifiable sugge
     esComprobante: true, proveedor: ' Cafetería Sintética ', rfcProveedor: 'CAF-010101-AA1', fecha: '2026-10-08', moneda: 'MXN',
     subtotal: '50', iva: '8.00', retenciones: '', total: '$58.00', concepto: 'Café y pan',
   }});
-  const result = await extractReceipt({bytes: new TextEncoder().encode('%PDF-1.4'), mediaType: 'application/pdf'}, {rfc: 'XAXX010101000', name: 'Negocio'}, client);
+  let result!: Awaited<ReturnType<typeof extractReceipt>>;
+  await withEnvironment({FACTURIA_AI_MODEL: undefined}, async () => {
+    result = await extractReceipt({bytes: new TextEncoder().encode('%PDF-1.4'), mediaType: 'application/pdf'}, {rfc: 'XAXX010101000', name: 'Negocio'}, client);
+  });
   assert.equal(calls[0].model, 'claude-haiku-5-5');
   assert.equal(calls[0].output_config?.effort, 'low');
   const content = calls[0].messages[0].content as Array<{type: string}>;
